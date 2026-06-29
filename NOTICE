@@ -1,0 +1,8 @@
+agentic-workbench
+
+Copyright (c) 2026 Nikita Parfenov
+
+A toolkit for building, validating, evaluating, and benchmarking agentic systems.
+
+Initial modules:
+- agent-runtime-validator
