@@ -135,7 +135,20 @@ validator = RuntimeValidator(
 `max_attempts` prevents infinite loops — after the limit is reached, the
 validator switches to `"interrupt"` regardless.
 
-For an LLM-based judge or schema validation, see [Validators](validators.md).
+For an LLM-based judge, cap repeated validator calls in retry/reroute loops:
+
+```python
+from agent_runtime_validator.validators import LLMJudgeValidator
+
+validator = RuntimeValidator(
+    triggers=[...],
+    validator=LLMJudgeValidator(model=call_model),
+    max_validator_calls_per_run=1,
+    on_validator_budget_exhausted="skip",  # default: triggers + policy decide
+)
+```
+
+For full LLM judge and schema validation options, see [Validators](validators.md).
 
 > Runnable version: [`examples/trigger_score.py`](../../examples/trigger_score.py).
 

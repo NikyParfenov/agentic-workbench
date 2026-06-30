@@ -13,7 +13,7 @@ and may change.
 | Triggers | Max calls, tokens, time, routes; same-tool loop; same-tool-same-args loop; agent ping-pong; no progress; tool error rate; no tool usage |
 | Validators | NoOp, JSON Schema, tool argument, LLM judge (with trace details, retries, redaction, robust JSON extraction), trigger score |
 | Policy | `DefaultPolicy` with severity-based action mapping, validator escalation/downgrade safety controls |
-| Runtime | Sync and async `RuntimeValidator` with standard-library logging |
+| Runtime | Sync and async `RuntimeValidator` with standard-library logging and optional per-run validator call budget |
 | Integrations | LangGraph (`ValidationNode`, `state_to_trace`, `create_validation_router`) |
 | OSS | GitHub Actions CI, CONTRIBUTING.md, Apache-2.0, typed, examples |
 

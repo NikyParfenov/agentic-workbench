@@ -40,14 +40,17 @@ It runs three stages and returns a `ValidationDecision`:
 1. **Triggers** — fast, deterministic checks over the trace. Each returns
    whether it fired, at what severity, and supporting evidence.
 2. **Validator** *(optional)* — a deeper check that runs **only if a trigger
-   fired**. It can be a deterministic scorer (`TriggerScoreValidator`),
-   schema-based, or an LLM judge. Skipped by default.
+   fired** and the validator call budget allows it. It can be a deterministic
+   scorer (`TriggerScoreValidator`), schema-based, or an LLM judge. Skipped by
+   default when no validator is configured, and skipped after budget exhaustion
+   when `on_validator_budget_exhausted="skip"`.
 3. **Policy** — turns the fired triggers (and any validator recommendation) into
    a single action.
 
-Because the validator only runs when something already looks wrong, the common
-"everything is fine" path stays cheap and never calls an LLM. Field-level details
-of every stage live in [Architecture](architecture.md).
+Because the validator only runs when something already looks wrong — and can be
+capped with `max_validator_calls_per_run` — the common "everything is fine" path
+stays cheap and never calls an LLM. Field-level details of every stage live in
+[Architecture](architecture.md).
 
 > Runnable starting point: [`examples/basic_runtime.py`](../../examples/basic_runtime.py).
 

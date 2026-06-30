@@ -59,15 +59,15 @@ This is not a safety moderation library. It does not replace input/output guardr
 ExecutionTrace
      ↓
 Triggers  →  TriggerResult[]
-     ↓  (only if triggers fired)
-Validator  →  ValidatorResult
+     ↓  (only if triggers fired and validator budget allows)
+Validator  →  ValidatorResult | skipped
      ↓
 Policy  →  ValidationDecision
 ```
 
 **Triggers** are deterministic and fast. They fire on observable patterns (loop counts, routing depth, error rates).
 
-**Validators** are optional. `LLMJudgeValidator` invokes an LLM only when triggers fire — not on every step.
+**Validators** are optional. `LLMJudgeValidator` invokes an LLM only when triggers fire — not on every step. For retry/reroute loops, set `max_validator_calls_per_run=1` to cap expensive validator calls per trace/run.
 
 **Policies** map trigger severity + validator recommendations to decisions.
 
@@ -238,11 +238,19 @@ validator switches to `"interrupt"`.
 ## LLM Judge
 
 ```python
+from agent_runtime_validator import RuntimeValidator
 from agent_runtime_validator.validators import LLMJudgeValidator
 
 # Sync model (any callable: str → str)
 judge = LLMJudgeValidator(
     model=lambda prompt: my_client.generate(prompt)
+)
+
+validator = RuntimeValidator(
+    triggers=[...],
+    validator=judge,
+    max_validator_calls_per_run=1,          # recommended for LLM judges
+    on_validator_budget_exhausted="skip",  # default: let triggers + policy decide
 )
 
 # Async model (callable: str → Awaitable[str])

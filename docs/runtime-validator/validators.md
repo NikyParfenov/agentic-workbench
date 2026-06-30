@@ -3,15 +3,17 @@
 ## Purpose
 
 Reference for validators: the optional deep-check stage that runs only after a
-trigger fires. Validators can confirm a problem, add detail, and recommend an
-action that overrides the policy default.
+trigger fires and the validator call budget allows it. Validators can confirm a
+problem, add detail, and recommend an action; policy combines that recommendation
+with trigger severity safeguards.
 
 ## When a validator runs
 
-A validator is invoked only when **both** are true:
+A validator is invoked only when all three are true:
 
-1. At least one trigger fired, and
-2. The configured validator is not the default `NoOpValidator`.
+1. At least one trigger fired,
+2. The configured validator is not the default `NoOpValidator`, and
+3. `max_validator_calls_per_run` is unset or has not been exhausted.
 
 This keeps the healthy path free of extra work. If you pass no validator, the
 runtime uses `NoOpValidator` and skips the stage entirely.
@@ -26,6 +28,7 @@ Import validators from `agent_runtime_validator.validators`.
 | `JsonSchemaValidator` | Tool call **args** and tool **results** against JSON Schemas | `interrupt` |
 | `ToolArgumentValidator` | Args of **completed** tool calls against JSON Schemas | `interrupt` |
 | `LLMJudgeValidator` | Sends the trace summary + fired triggers to an LLM | from the model |
+| `TriggerScoreValidator` | Weighted risk score from fired triggers | configurable |
 
 ### JsonSchemaValidator
 
@@ -103,8 +106,9 @@ suspect.
 
 ## The ValidatorResult
 
-A validator returns a `ValidatorResult`. Its `recommendation` overrides the
-policy's severity-based action when present.
+A validator returns a `ValidatorResult`. Its `recommendation` can escalate the
+policy's severity-based action; downgrades are only accepted when the policy is
+configured to allow them and the validator confidence is high enough.
 
 | Field | Type | Meaning |
 |-------|------|---------|
@@ -170,6 +174,59 @@ same-tool-same-args loop → retry or reroute — anywhere the trigger evidence 
 sufficient and an LLM call would add latency and cost without value.
 
 > Runnable version: [`examples/trigger_score.py`](../../examples/trigger_score.py).
+
+## Validator call budget
+
+`RuntimeValidator.max_validator_calls_per_run` limits how many times the
+optional validator is invoked for the same trace/run. This is useful for
+expensive validators such as `LLMJudgeValidator` in retry/reroute loops.
+
+```python
+from agent_runtime_validator import RuntimeValidator
+from agent_runtime_validator.validators import LLMJudgeValidator
+
+runtime = RuntimeValidator(
+    triggers=[...],
+    validator=LLMJudgeValidator(model=call_model),
+    max_validator_calls_per_run=1,
+    on_validator_budget_exhausted="skip",  # default
+)
+```
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `max_validator_calls_per_run` | `None` | Max invocations per run; `None` = unlimited, `0` = never call |
+| `on_validator_budget_exhausted` | `"skip"` | What to do when budget is exhausted |
+
+Budget state is stored in `trace.metadata["_runtime_validator_call_count"]`
+and persists across repeated calls to `validate()` on the same `ExecutionTrace`
+object. In LangGraph, `ValidationNode` writes the trace back into state after
+each call so budget state survives across serialized/checkpointed traces.
+
+### Exhausted behavior options
+
+| `on_validator_budget_exhausted` | Behavior when budget is exhausted |
+|---|---|
+| `"skip"` | Do not call validator; pass `validator_result=None` to policy. Triggers + policy decide. **Default.** |
+| `"continue"` | Return synthetic validator result recommending `continue`; trigger severity may still produce retry/interrupt/abort. |
+| `"retry_last_step"` | Return synthetic validator result recommending retry. Use only with bounded retry loops. |
+| `"reroute"` | Return synthetic validator result recommending reroute. Useful with fallback/human-review branches. |
+| `"interrupt"` | Return synthetic validator result recommending interrupt. Safe fail-closed behavior. |
+| `"abort"` | Return synthetic validator result recommending abort. Strict fail-closed behavior. |
+
+> **Note:** `"skip"` does not force `decision.action == "continue"`. If a fired
+> trigger has high severity, the default policy still returns `"interrupt"`.
+> Similarly, `"continue"` does not guarantee a final continue action — the policy
+> also considers fired trigger severity.
+
+**`max_retries` vs `max_validator_calls_per_run`**
+
+`LLMJudgeValidator.max_retries` retries malformed LLM responses inside a
+single validator invocation.
+
+`RuntimeValidator.max_validator_calls_per_run` limits how many validator
+invocations can happen across the entire run — it guards against repeated
+expensive calls during retry/reroute orchestration loops.
 
 ## Writing a custom validator
 

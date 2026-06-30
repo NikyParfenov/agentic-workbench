@@ -17,10 +17,12 @@ ExecutionTrace
       v
   any fired? --no--> [ Policy ]
       |
-     yes (and validator is not NoOp)
+     yes (and validator is not NoOp, and call budget allows)
       |
       v
 [ Validator ]     validate(trace, results) -> ValidatorResult   (optional, may call LLM)
+      |
+      | skipped when budget exhausted with on_validator_budget_exhausted="skip"
       |
       v
 [ Policy ]        decide(...) -> ValidationDecision
@@ -99,23 +101,31 @@ are required.
 
 ## RuntimeValidator internals
 
-`RuntimeValidator(triggers, validator=None, policy=None)` defaults to
-`NoOpValidator` and `DefaultPolicy`. Both `validate` and `validate_async`:
+`RuntimeValidator(triggers, validator=None, policy=None, ...)` defaults to
+`NoOpValidator`, `DefaultPolicy`, unlimited validator invocations
+(`max_validator_calls_per_run=None`), and skip-on-budget-exhaustion
+(`on_validator_budget_exhausted="skip"`). Both `validate` and `validate_async`:
 
 1. Run every trigger to build `trigger_results`.
 2. Compute `fired = [r for r in trigger_results if r.triggered]`.
-3. Invoke the validator **only** if `fired` and the validator is not a
-   `NoOpValidator`.
-4. Call `policy.decide(trace, trigger_results, validator_result)`.
+3. Invoke the validator **only** if `fired`, the validator is not a
+   `NoOpValidator`, and `max_validator_calls_per_run` has not been exhausted.
+4. If the validator budget is exhausted, either pass `validator_result=None`
+   (`on_validator_budget_exhausted="skip"`) or pass a synthetic
+   `ValidatorResult` with the configured recommendation.
+5. Call `policy.decide(trace, trigger_results, validator_result)`.
 
 The sync `validate` raises `RuntimeError` if a validator returns an awaitable;
 `validate_async` awaits it instead. The `NoOpValidator` is special-cased so the
-healthy path performs no extra work.
+healthy path performs no extra work. Validator call budget state is kept in
+`trace.metadata["_runtime_validator_call_count"]`.
 
 ## How actions are chosen
 
 `DefaultPolicy` picks the highest fired severity, then maps it to an action. A
-validator's `recommendation`, when present, replaces this default.
+validator's `recommendation`, when present, can escalate this default. Downgrades
+are blocked unless `allow_validator_downgrade=True` and the validator confidence
+meets `min_confidence_for_override`; critical severity cannot be downgraded.
 
 | Severity | Default action | Disabled-toggle fallback |
 |----------|----------------|--------------------------|

@@ -97,6 +97,42 @@ cheaper, and fully testable.
 `max_attempts` guard prevents infinite retry/reroute loops by tracking counts
 in `trace.metadata`.
 
+## 2026-06-30 — Validator calls can be budgeted per run
+
+**Decision:** `RuntimeValidator` exposes `max_validator_calls_per_run` to limit
+how many times the optional validator can be invoked for the same trace/run.
+When the budget is exhausted, the default behavior is
+`on_validator_budget_exhausted="skip"`: do not call the validator and let fired
+triggers plus policy decide.
+
+**Reason:** LLM judges and other deep validators may be expensive. In a
+retry/reroute loop, repeatedly calling the same validator can burn latency and
+cost without adding useful signal. Skipping the optional validator after the
+budget is exhausted preserves deterministic trigger handling without forcing an
+automatic interrupt or abort.
+
+**Consequences:** Users can set `max_validator_calls_per_run=1` for production
+LLM judge usage. If they want fail-closed behavior when the budget is exhausted,
+they can set `on_validator_budget_exhausted` to `"interrupt"` or `"abort"`.
+Budget state lives in `trace.metadata`, so integrations that parse serialized
+traces must write the updated trace back into state.
+
+## 2026-06-30 — Policy blocks validator downgrades by default
+
+**Decision:** Validator recommendations can escalate the severity-derived action
+by default. Downgrades require explicit opt-in with
+`allow_validator_downgrade=True` and sufficient validator confidence. Critical
+trigger severity cannot be downgraded.
+
+**Reason:** A validator may have deeper context, but deterministic trigger
+evidence should not be silently weakened by a low-confidence or overly optimistic
+validator result.
+
+**Consequences:** Users who want validator recommendations to soften trigger
+responses must opt in deliberately. When a downgrade is rejected, the decision
+reason explains that policy kept the safer action due to severity/confidence
+safeguards.
+
 ## Related
 
 - [Overview](overview.md)

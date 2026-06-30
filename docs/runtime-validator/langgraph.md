@@ -78,8 +78,10 @@ builder.add_edge("validation", "supervisor")
 | `triggers` | — | Triggers to run (required) |
 | `validator` | `None` | Optional deep-check validator |
 | `policy` | `None` | Optional custom policy |
-| `trace_key` | `"trace"` | State key to read the trace from |
+| `trace_key` | `"trace"` | State key to read/write the trace |
 | `decision_key` | `"decision"` | State key to write the decision to |
+| `max_validator_calls_per_run` | `None` | Max validator invocations per run; `None` = unlimited |
+| `on_validator_budget_exhausted` | `"skip"` | What to do when budget is exhausted — see [Validators](validators.md#validator-call-budget) |
 
 ### How the node resolves the trace
 
@@ -89,8 +91,11 @@ When called, the node reads `state[trace_key]` and:
 - if it is a dict, parses it with `ExecutionTrace(**trace)`;
 - if it is already an `ExecutionTrace`, uses it as-is.
 
-It then returns `{**state, decision_key: decision}`, leaving the rest of the
-state untouched.
+It then returns `{**state, trace_key: trace, decision_key: decision}`, leaving
+other state fields untouched. Writing the resolved trace back into state
+ensures `trace.metadata` (including validator call budget) persists across
+subsequent node invocations, even when the trace was originally passed as a
+serialized dict.
 
 ## Routing on the decision
 

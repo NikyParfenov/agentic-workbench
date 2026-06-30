@@ -11,7 +11,7 @@ from ...schema.decisions import ValidationDecision
 from ...triggers.base import BaseTrigger
 from ...validators.base import BaseValidator
 from ...policies.base import BasePolicy
-from ...runtime import RuntimeValidator
+from ...runtime import RuntimeValidator, OnValidatorBudgetExhausted
 from .adapter import state_to_trace
 
 
@@ -79,8 +79,16 @@ class ValidationNode:
         policy: BasePolicy | None = None,
         trace_key: str = "trace",
         decision_key: str = "decision",
+        max_validator_calls_per_run: int | None = None,
+        on_validator_budget_exhausted: OnValidatorBudgetExhausted = "skip",
     ):
-        self._runtime = RuntimeValidator(triggers=triggers, validator=validator, policy=policy)
+        self._runtime = RuntimeValidator(
+            triggers=triggers,
+            validator=validator,
+            policy=policy,
+            max_validator_calls_per_run=max_validator_calls_per_run,
+            on_validator_budget_exhausted=on_validator_budget_exhausted,
+        )
         self.trace_key = trace_key
         self.decision_key = decision_key
 
@@ -91,7 +99,7 @@ class ValidationNode:
         elif isinstance(trace, dict):
             trace = ExecutionTrace(**trace)
         decision = self._runtime.validate(trace)
-        return {**state, self.decision_key: decision}
+        return {**state, self.trace_key: trace, self.decision_key: decision}
 
     async def async_call(self, state: dict) -> dict:
         trace = state.get(self.trace_key)
@@ -100,4 +108,4 @@ class ValidationNode:
         elif isinstance(trace, dict):
             trace = ExecutionTrace(**trace)
         decision = await self._runtime.validate_async(trace)
-        return {**state, self.decision_key: decision}
+        return {**state, self.trace_key: trace, self.decision_key: decision}
