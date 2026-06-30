@@ -1,10 +1,16 @@
 # agentic-workbench
 
+![CI](https://github.com/NikyParfenov/agentic-workbench/actions/workflows/ci.yml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13-blue)
+![License](https://img.shields.io/github/license/NikyParfenov/agentic-workbench)
+
 A toolkit for building, validating, evaluating, and benchmarking agentic systems.
 
 ## agent-runtime-validator
 
 Runtime validation and recovery for agentic systems.
+
+> **Status: v0.1-alpha.** The core API is usable, but trace import/export, config-driven validation, and broader framework integrations are still evolving.
 
 ## Problem Statement
 
@@ -19,9 +25,23 @@ Neither addresses **runtime execution validation** — detecting failure pattern
 - Repeated failures
 - Exploding token/cost usage
 
-## Why Guardrails Are Insufficient
+## How this differs from guardrails and observability tools
 
-Input/output guardrails validate individual requests. They cannot observe the **trajectory** — whether the agent is making progress, stuck in a loop, or bouncing between agents unproductively.
+| | Guardrails | Observability (LangSmith, Phoenix, LangFuse) | **agent-runtime-validator** |
+|---|---|---|---|
+| **What it checks** | Individual inputs, outputs, tool safety | Completed traces, offline evals | Execution trajectory *while running* |
+| **When it runs** | Before/after a single LLM call | After the run finishes | During the run, at each checkpoint |
+| **What it returns** | Pass/fail on content | Metrics, scores, dashboards | Actionable decision: continue, retry, reroute, interrupt, abort |
+| **Loop/routing detection** | No | Post-hoc analysis | Real-time, deterministic triggers |
+
+This is not a safety moderation library. It does not replace input/output guardrails or tracing platforms. It fills the gap between them — a lightweight in-process decision layer over execution trajectories.
+
+## When not to use this
+
+- You only need input/output content moderation — use a guardrails library instead.
+- You need a hosted tracing dashboard — use LangSmith, Phoenix, or LangFuse.
+- You expect automatic trace collection without instrumenting your nodes — this library requires you to populate the trace.
+- You need production-stable APIs today — this is alpha software.
 
 ## Runtime Validation Concept
 
@@ -56,7 +76,7 @@ Policy  →  ValidationDecision
 ### From source
 
 ```bash
-git clone https://github.com/nikitaparfenov/agentic-workbench.git
+git clone https://github.com/NikyParfenov/agentic-workbench.git
 cd agentic-workbench
 ```
 
@@ -111,6 +131,19 @@ validator = RuntimeValidator(
 decision = validator.validate(trace)
 if not decision.should_continue:
     print(f"Stopping: {decision.action} — {decision.reason}")
+```
+
+For a runnable loop-detection demo:
+
+```bash
+uv run python examples/basic_loop_detection.py
+```
+
+```
+=== Validation decision ===
+Action:      interrupt
+Severity:    high
+Triggered:   ['SameToolSameArgsLoopTrigger', 'NoProgressTrigger', 'ToolErrorRateTrigger']
 ```
 
 ## LangGraph Example
@@ -248,8 +281,8 @@ logging.getLogger("agent_runtime_validator").setLevel(logging.DEBUG)
 
 ## Roadmap
 
-- **v0.1** — LangGraph, deterministic triggers, trigger score validator, LLM Judge, recovery decisions
-- **v0.2** — Offline replay, trace import/export, artifact validation, pre-execution hooks
-- **v0.3** — CrewAI, LlamaIndex, OpenAI Agents SDK, PydanticAI, agent-scoped triggers
+- **v0.1-alpha** — LangGraph, deterministic triggers, trigger score validator, LLM judge, policy safety controls, decision routing, logging
+- **v0.2** — Offline replay, trace import/export, config-driven validation, artifact validation
+- **v0.3** — CrewAI, LlamaIndex, OpenAI Agents SDK, PydanticAI, windowed/agent-scoped triggers, default redaction
 - **v0.4** — CompositeValidator, ExecutionInvariantValidator, trigger composition, cost tracking
-- **v1.0** — Decentralized multi-agent support, graph cycle/deadlock detection
+- **v1.0** — Incremental runtime API, distributed traces, observability integrations

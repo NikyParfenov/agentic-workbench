@@ -241,6 +241,33 @@ def test_llm_judge_unparseable_response():
     assert result.confidence == 0.0
 
 
+def test_llm_judge_parses_fenced_json():
+    trace = make_trace()
+    raw = '```json\n{"valid": true, "confidence": 0.8, "recommendation": "continue", "reason": "ok"}\n```'
+    validator = LLMJudgeValidator(model=lambda p: raw)
+    result = validator.validate(trace, [])
+    assert result.valid is True
+    assert result.confidence == 0.8
+
+
+def test_llm_judge_parses_preamble_json():
+    trace = make_trace()
+    raw = 'Here is my analysis:\n{"valid": false, "confidence": 0.7, "recommendation": "interrupt", "reason": "looping"}'
+    validator = LLMJudgeValidator(model=lambda p: raw)
+    result = validator.validate(trace, [])
+    assert result.valid is False
+    assert result.recommendation == "interrupt"
+
+
+def test_llm_judge_parses_json_with_trailing_text():
+    trace = make_trace()
+    raw = 'Sure!\n{"valid": true, "confidence": 0.6, "recommendation": "continue", "reason": "ok"}\nHope that helps!'
+    validator = LLMJudgeValidator(model=lambda p: raw)
+    result = validator.validate(trace, [])
+    assert result.valid is True
+    assert result.confidence == 0.6
+
+
 def test_llm_judge_is_base_validator():
     assert issubclass(LLMJudgeValidator, BaseValidator)
 

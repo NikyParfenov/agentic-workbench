@@ -4,19 +4,42 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agent-runtime-validator"
-version = "0.1.0"
-description = "Runtime validation and recovery for agentic systems"
+version = "0.1.0a1"
+description = "Runtime trajectory validation for agentic systems"
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
+authors = [
+    {name = "Nikita Parfenov", email = "nikyparfenov@gmail.com"},
+]
+keywords = [
+    "agents", "validation", "runtime", "langgraph", "guardrails",
+    "trajectory", "llm", "multi-agent", "triggers",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries",
+    "Typing :: Typed",
+]
 dependencies = [
     "pydantic>=2.0",
     "jsonschema>=4.0",
 ]
 
+[project.urls]
+Homepage = "https://github.com/NikyParfenov/agentic-workbench"
+Repository = "https://github.com/NikyParfenov/agentic-workbench"
+Issues = "https://github.com/NikyParfenov/agentic-workbench/issues"
+Documentation = "https://github.com/NikyParfenov/agentic-workbench/tree/main/docs/runtime-validator"
+
 [project.optional-dependencies]
 langgraph = ["langgraph>=0.2"]
-dev = ["pytest>=7.0", "pytest-asyncio>=0.21"]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.21", "pyright>=1.1"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

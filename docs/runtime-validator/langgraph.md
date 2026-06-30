@@ -94,7 +94,48 @@ state untouched.
 
 ## Routing on the decision
 
-Use a conditional edge to branch on the decision the node wrote:
+Use `create_validation_router` to generate a conditional routing function:
+
+```python
+from agent_runtime_validator.integrations.langgraph import (
+    ValidationNode,
+    create_validation_router,
+)
+
+builder.add_conditional_edges(
+    "validation",
+    create_validation_router(
+        continue_to="supervisor",
+        retry_to="researcher",
+        reroute_to="fallback_agent",
+        interrupt_to="human_review",
+        # abort_to defaults to END
+    ),
+)
+```
+
+The router maps each `decision.action` to a node name. For `reroute`, it returns
+`reroute_to` by default. If `allowed_reroutes` is set and
+`decision.validator_result.suggested_next_agent` is in that allowlist, it routes
+to the suggested node instead.
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `continue_to` | — | Node for `continue` (required) |
+| `retry_to` | `continue_to` | Node for `retry_last_step` |
+| `reroute_to` | `continue_to` | Fallback node for `reroute` |
+| `interrupt_to` | `continue_to` | Node for `interrupt` |
+| `abort_to` | `END` | Node for `abort` |
+| `allowed_reroutes` | `None` | Allowlist for `suggested_next_agent`; `None` = ignore suggested, use `reroute_to` |
+
+By default `suggested_next_agent` is ignored — reroute always goes to
+`reroute_to`. Pass an explicit set of node names to opt in to dynamic rerouting.
+This prevents an LLM judge from routing to arbitrary or non-existent nodes.
+
+The router handles both Pydantic `ValidationDecision` objects and plain dicts
+(common after LangGraph state serialization via checkpointer).
+
+For a fully manual router instead:
 
 ```python
 def route(state):

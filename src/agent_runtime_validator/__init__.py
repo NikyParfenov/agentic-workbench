@@ -5,7 +5,7 @@ from .triggers.base import BaseTrigger
 from .validators.base import BaseValidator
 from .policies.base import BasePolicy
 
-__version__ = "0.1.0"
+__version__ = "0.1.0a1"
 
 __all__ = [
     "RuntimeValidator",

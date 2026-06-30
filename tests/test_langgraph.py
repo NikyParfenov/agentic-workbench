@@ -8,8 +8,9 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from datetime import datetime, timezone
 from conftest import make_trace, make_routing_event
-from agent_runtime_validator.integrations.langgraph.nodes import ValidationNode
+from agent_runtime_validator.integrations.langgraph.nodes import ValidationNode, create_validation_router
 from agent_runtime_validator.integrations.langgraph.adapter import state_to_trace
+from agent_runtime_validator.schema.decisions import ValidationDecision, ValidatorResult
 from agent_runtime_validator.triggers import MaxRoutesTrigger
 
 
@@ -75,3 +76,89 @@ async def test_validation_node_async():
     state = {"trace": trace}
     result = await node.async_call(state)
     assert result["decision"].triggered_by == ["MaxRoutesTrigger"]
+
+
+# --- create_validation_router ---
+
+def _decision(action, suggested_next_agent=None):
+    vr = None
+    if suggested_next_agent:
+        vr = ValidatorResult(
+            valid=False, confidence=1.0, recommendation="reroute",
+            reason="reroute", suggested_next_agent=suggested_next_agent,
+        )
+    return ValidationDecision(
+        should_continue=(action == "continue"), action=action,
+        severity="medium", reason="test", validator_result=vr,
+    )
+
+
+def test_router_continue():
+    router = create_validation_router(continue_to="supervisor")
+    assert router({"decision": _decision("continue")}) == "supervisor"
+
+
+def test_router_retry():
+    router = create_validation_router(continue_to="supervisor", retry_to="researcher")
+    assert router({"decision": _decision("retry_last_step")}) == "researcher"
+
+
+def test_router_reroute_suggested_ignored_by_default():
+    router = create_validation_router(continue_to="supervisor", reroute_to="fallback")
+    assert router({"decision": _decision("reroute", suggested_next_agent="data_agent")}) == "fallback"
+
+
+def test_router_reroute_suggested_used_with_allowlist():
+    router = create_validation_router(
+        continue_to="supervisor", reroute_to="fallback",
+        allowed_reroutes={"data_agent"},
+    )
+    assert router({"decision": _decision("reroute", suggested_next_agent="data_agent")}) == "data_agent"
+
+
+def test_router_reroute_fallback():
+    router = create_validation_router(continue_to="supervisor", reroute_to="fallback")
+    assert router({"decision": _decision("reroute")}) == "fallback"
+
+
+def test_router_reroute_blocked_by_allowlist():
+    router = create_validation_router(
+        continue_to="supervisor", reroute_to="fallback",
+        allowed_reroutes={"safe_agent"},
+    )
+    assert router({"decision": _decision("reroute", suggested_next_agent="evil_agent")}) == "fallback"
+
+
+def test_router_reroute_allowed_by_allowlist():
+    router = create_validation_router(
+        continue_to="supervisor", reroute_to="fallback",
+        allowed_reroutes={"safe_agent"},
+    )
+    assert router({"decision": _decision("reroute", suggested_next_agent="safe_agent")}) == "safe_agent"
+
+
+def test_router_interrupt():
+    router = create_validation_router(continue_to="supervisor", interrupt_to="human")
+    assert router({"decision": _decision("interrupt")}) == "human"
+
+
+def test_router_abort_default_end():
+    from langgraph.graph import END
+    router = create_validation_router(continue_to="supervisor")
+    assert router({"decision": _decision("abort")}) == END
+
+
+def test_router_abort_custom():
+    router = create_validation_router(continue_to="supervisor", abort_to="cleanup")
+    assert router({"decision": _decision("abort")}) == "cleanup"
+
+
+def test_router_missing_decision():
+    router = create_validation_router(continue_to="supervisor")
+    assert router({}) == "supervisor"
+
+
+def test_router_dict_decision():
+    router = create_validation_router(continue_to="supervisor", retry_to="researcher")
+    decision_dict = _decision("retry_last_step").model_dump()
+    assert router({"decision": decision_dict}) == "researcher"

@@ -164,9 +164,28 @@ def _build_prompt(
     )
 
 
+def _extract_json(raw: str) -> str:
+    """Extract JSON from raw LLM output: fenced blocks, preamble, trailing text."""
+    import re
+    text = raw.strip()
+    fence = re.search(r"```(?:json)?\s*\n?(.*?)\n?\s*```", text, re.DOTALL)
+    if fence:
+        return fence.group(1).strip()
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(text):
+        if ch == "{":
+            try:
+                obj, _ = decoder.raw_decode(text[i:])
+                return json.dumps(obj)
+            except json.JSONDecodeError:
+                continue
+    return text
+
+
 def _parse_response(raw: str, fallback_recommendation: Recommendation) -> ValidatorResult:
+    extracted = _extract_json(raw)
     try:
-        result = ValidatorResult.model_validate_json(raw.strip())
+        result = ValidatorResult.model_validate_json(extracted)
         logger.debug("LLM judge response parsed successfully")
         return result
     except Exception:

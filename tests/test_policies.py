@@ -103,3 +103,48 @@ def test_custom_policy_flags():
 
 def test_default_policy_is_base_policy():
     assert issubclass(DefaultPolicy, BasePolicy)
+
+
+def test_validator_escalation_allowed():
+    policy = DefaultPolicy()
+    vr = ValidatorResult(
+        valid=False, confidence=0.9, recommendation="abort", reason="critical finding"
+    )
+    decision = policy.decide(make_trace(), [_fired("T", "medium")], vr)
+    assert decision.action == "abort"
+
+
+def test_validator_downgrade_blocked_by_default():
+    policy = DefaultPolicy()
+    vr = ValidatorResult(
+        valid=True, confidence=0.3, recommendation="continue", reason="looks fine"
+    )
+    decision = policy.decide(make_trace(), [_fired("T", "high")], vr)
+    assert decision.action == "interrupt"
+
+
+def test_validator_downgrade_allowed_with_high_confidence():
+    policy = DefaultPolicy(allow_validator_downgrade=True, min_confidence_for_override=0.7)
+    vr = ValidatorResult(
+        valid=True, confidence=0.9, recommendation="continue", reason="looks fine"
+    )
+    decision = policy.decide(make_trace(), [_fired("T", "medium")], vr)
+    assert decision.action == "continue"
+
+
+def test_validator_downgrade_rejected_low_confidence():
+    policy = DefaultPolicy(allow_validator_downgrade=True, min_confidence_for_override=0.7)
+    vr = ValidatorResult(
+        valid=True, confidence=0.5, recommendation="continue", reason="not sure"
+    )
+    decision = policy.decide(make_trace(), [_fired("T", "high")], vr)
+    assert decision.action == "interrupt"
+
+
+def test_critical_cannot_be_downgraded():
+    policy = DefaultPolicy(allow_validator_downgrade=True, min_confidence_for_override=0.0)
+    vr = ValidatorResult(
+        valid=True, confidence=1.0, recommendation="continue", reason="override attempt"
+    )
+    decision = policy.decide(make_trace(), [_fired("T", "critical")], vr)
+    assert decision.action == "abort"

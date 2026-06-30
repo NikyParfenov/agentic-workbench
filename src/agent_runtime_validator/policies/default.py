@@ -13,10 +13,14 @@ class DefaultPolicy(BasePolicy):
         retry_on_medium: bool = True,
         interrupt_on_high: bool = True,
         abort_on_critical: bool = True,
+        allow_validator_downgrade: bool = False,
+        min_confidence_for_override: float = 0.7,
     ):
         self.retry_on_medium = retry_on_medium
         self.interrupt_on_high = interrupt_on_high
         self.abort_on_critical = abort_on_critical
+        self.allow_validator_downgrade = allow_validator_downgrade
+        self.min_confidence_for_override = min_confidence_for_override
 
     def _highest_severity(self, fired: list[TriggerResult]) -> Severity:
         if not fired:
@@ -31,6 +35,32 @@ class DefaultPolicy(BasePolicy):
         if severity == "high":
             return "interrupt" if self.interrupt_on_high else "continue"
         return "abort" if self.abort_on_critical else "interrupt"
+
+    def _resolve_action(
+        self, severity: Severity, validator_result: ValidatorResult | None,
+    ) -> Action:
+        severity_action = self._action_for_severity(severity)
+        if validator_result is None:
+            return severity_action
+
+        rec = validator_result.recommendation
+        severity_rank = _SEVERITY_ORDER.get(severity, 0)
+        sev_action_rank = ["continue", "retry_last_step", "reroute", "interrupt", "abort"]
+        rec_idx = sev_action_rank.index(rec) if rec in sev_action_rank else 0
+        sev_idx = sev_action_rank.index(severity_action) if severity_action in sev_action_rank else 0
+
+        is_escalation = rec_idx > sev_idx
+        if is_escalation:
+            return rec
+
+        if severity_rank >= _SEVERITY_ORDER["critical"]:
+            return severity_action
+
+        if not self.allow_validator_downgrade:
+            return severity_action
+        if validator_result.confidence < self.min_confidence_for_override:
+            return severity_action
+        return rec
 
     def decide(
         self,
@@ -53,16 +83,18 @@ class DefaultPolicy(BasePolicy):
             )
 
         severity = self._highest_severity(fired)
-        action: Action = (
-            validator_result.recommendation
-            if validator_result is not None
-            else self._action_for_severity(severity)
-        )
-        reason = (
-            validator_result.reason
-            if validator_result is not None
-            else f"Trigger(s) fired: {', '.join(triggered_by)}"
-        )
+        action = self._resolve_action(severity, validator_result)
+
+        if validator_result is None:
+            reason = f"Trigger(s) fired: {', '.join(triggered_by)}"
+        elif action == validator_result.recommendation:
+            reason = validator_result.reason
+        else:
+            reason = (
+                f"Validator recommended {validator_result.recommendation!r}, "
+                f"but policy kept {action!r} due to severity/confidence safeguards. "
+                f"Validator reason: {validator_result.reason}"
+            )
 
         return ValidationDecision(
             should_continue=(action == "continue"),
