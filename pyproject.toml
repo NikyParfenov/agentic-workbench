@@ -35,7 +35,7 @@ dependencies = [
 Homepage = "https://github.com/NikyParfenov/agentic-workbench"
 Repository = "https://github.com/NikyParfenov/agentic-workbench"
 Issues = "https://github.com/NikyParfenov/agentic-workbench/issues"
-Documentation = "https://github.com/NikyParfenov/agentic-workbench/tree/main/docs/runtime-validator"
+Documentation = "https://github.com/NikyParfenov/agentic-workbench/tree/HEAD/docs/runtime-validator"
 
 [project.optional-dependencies]
 langgraph = ["langgraph>=0.2"]

@@ -12,6 +12,8 @@ Runtime validation and recovery for agentic systems.
 
 > **Status: v0.1-alpha.** The core API is usable, but trace import/export, config-driven validation, and broader framework integrations are still evolving.
 
+> **Examples disclaimer:** All examples use fictional agents, tools, datasets, and workflows for demonstration purposes only.
+
 ## Problem Statement
 
 Traditional guardrails validate inputs and outputs. Evaluation frameworks validate completed traces offline.
@@ -27,7 +29,7 @@ Neither addresses **runtime execution validation** — detecting failure pattern
 
 ## How this differs from guardrails and observability tools
 
-| | Guardrails | Observability (LangSmith, Phoenix, LangFuse) | **agent-runtime-validator** |
+| Dimension | Guardrails | Observability (LangSmith, Phoenix, LangFuse) | **agent-runtime-validator** |
 |---|---|---|---|
 | **What it checks** | Individual inputs, outputs, tool safety | Completed traces, offline evals | Execution trajectory *while running* |
 | **When it runs** | Before/after a single LLM call | After the run finishes | During the run, at each checkpoint |
@@ -160,7 +162,7 @@ node = ValidationNode(
 )
 
 builder.add_node("validation", node)
-builder.add_edge("bio_agent", "validation")
+builder.add_edge("research_agent", "validation")
 builder.add_edge("validation", "supervisor")
 ```
 
@@ -215,7 +217,7 @@ from agent_runtime_validator.validators import TriggerScoreValidator
 
 validator = RuntimeValidator(
     triggers=[
-        NoToolUsageTrigger(watched_agents={"bio_agent"}),
+        NoToolUsageTrigger(watched_agents={"research_agent"}),
         NoProgressTrigger(min_tool_calls=3),
         AgentPingPongTrigger(max_cycles=2),
     ],
