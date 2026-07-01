@@ -419,6 +419,48 @@ Tool output [c1]: done
   `TraceBuilder.record_routing` / `record_agent_call` to record those events
   explicitly.
 
+## High-level state helper
+
+`build_trace_from_state` is a convenience function that assembles an
+`ExecutionTrace` in a single call by merging an existing trace (if any),
+LangChain messages, and artifacts from state.
+
+Use it when your graph already stores messages under `state["messages"]`
+and optionally has an existing trace under `state["trace"]`. It handles all
+three storage forms for the existing trace (``ExecutionTrace`` object, serialized
+``dict``, or absent key) and delegates message conversion to
+`from_langchain_messages`.
+
+```python
+from agent_runtime_validator.integrations.langgraph import build_trace_from_state
+
+validation_node = ValidationNode(
+    triggers=[...],
+    validator=judge,
+    validator_mode="always",
+    trace_builder=lambda state: build_trace_from_state(
+        state,
+        run_id=state.get("run_id", "run"),
+        messages_key="messages",
+        artifacts_key="artifacts",
+        agent_name="analyst",
+    ),
+)
+```
+
+Key notes:
+
+- Use this function when state has LangChain messages and/or an existing trace.
+  For graphs that build events manually via `TraceBuilder`, use
+  `TraceBuilder.record_routing` / `record_agent_call` for routing and semantic
+  agent-call events — `build_trace_from_state` never infers those from messages.
+
+- Message trimming (e.g. LangGraph's `messages` reducer) can remove older
+  context from `state["messages"]`. If your graph runs for many steps, storing a
+  durable `ExecutionTrace` in state (the `trace_key` slot) is safer than relying
+  solely on messages — the helper merges both, so older events in the trace are
+  preserved even after the messages list is trimmed.
+
 ## Related
 
 - [Overview](overview.md)
