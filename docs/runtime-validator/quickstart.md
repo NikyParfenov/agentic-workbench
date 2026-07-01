@@ -180,6 +180,35 @@ For full LLM judge and schema validation options, see [Validators](validators.md
 
 > Runnable version: [`examples/trigger_score.py`](../../examples/trigger_score.py).
 
+## Saving and replaying traces
+
+Save any trace to a JSON file — useful for debugging, auditing, and building offline test fixtures:
+
+```python
+from agent_runtime_validator import save_trace, load_trace, replay
+
+# Production: save after each run
+save_trace(trace, f"traces/{trace.run_id}.json")
+
+# CI / development: load and replay against an updated validator config
+loaded = load_trace("traces/run-abc123.json")
+decision = replay(loaded, validator)
+print(decision.action, decision.reason)
+```
+
+The file format is standard Pydantic JSON (all timestamps are ISO 8601 with timezone). For raw JSON strings without touching the filesystem:
+
+```python
+from agent_runtime_validator import trace_to_json, trace_from_json
+
+json_str = trace_to_json(trace)         # -> str (pretty-printed)
+trace2   = trace_from_json(json_str)    # -> ExecutionTrace
+```
+
+`replay` and `replay_async` are thin wrappers over `validator.validate()` that
+signal the intent — an existing trace is being re-validated offline, not being
+produced live.
+
 ## Async runs
 
 If a validator calls an async model or does async I/O, use `validate_async`.
