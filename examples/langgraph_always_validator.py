@@ -1,4 +1,4 @@
-"""Final-gate validation before a ResponseBuilder node — LangGraph example.
+"""LangGraph example: validator_mode="always" with a ResponseBuilder node.
 
 Graph shape:
     Planner → Analyst → ValidationNode(validator_mode="always")
@@ -11,7 +11,7 @@ the graph walks the happy path on a normal run. Set FORCE_REROUTE=True at the
 top to exercise the reroute branch instead.
 
 Run:
-    uv run python examples/langgraph_final_gate_formatter.py
+    uv run python examples/langgraph_always_validator.py
 """
 from __future__ import annotations
 

@@ -241,7 +241,7 @@ Calling sync `validate()` with an async model raises `RuntimeError` with a clear
 message pointing to `validate_async`. The async registration sidesteps this
 entirely.
 
-> For a final-gate LangGraph flow before building the final response, see [`examples/langgraph_final_gate_formatter.py`](../../examples/langgraph_final_gate_formatter.py).
+> For a `validator_mode="always"` LangGraph flow, see [`examples/langgraph_always_validator.py`](../../examples/langgraph_always_validator.py).
 
 ## Trace persistence and archiving
 
