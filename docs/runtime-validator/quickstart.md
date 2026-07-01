@@ -43,27 +43,52 @@ need deeper checks ([Validators](validators.md)).
 
 ## 2. Collect a trace
 
-A trace is a snapshot of what the agent has done so far. Only `run_id` and
-`started_at` are required; every event list defaults to empty and you append as
-the run progresses.
+A trace is a snapshot of what the agent has done so far. Use `TraceBuilder` to
+construct one incrementally — all `record_*` methods return `self` for fluent
+chaining, and timestamps default to `now()` if omitted.
 
 ```python
-from datetime import datetime, timezone
-from agent_runtime_validator import ExecutionTrace
-from agent_runtime_validator.schema.events import ToolCall, ToolResult
+from agent_runtime_validator import TraceBuilder
 
-now = lambda: datetime.now(timezone.utc)
+builder = TraceBuilder(run_id="run-123")
 
-trace = ExecutionTrace(run_id="run-123", started_at=now())
+# As the agent acts, record events:
+builder.record_routing("supervisor", "researcher", reason="delegate research")
+builder.record_tool_call("search", call_id="c1", args={"q": "acme"})
+builder.record_tool_result("c1", "search", output="found acme corp")
+builder.record_message("assistant", "I found the company.")
 
-# ...as the agent acts, record events:
-trace.tool_calls.append(
-    ToolCall(tool_name="search", call_id="c1", args={"q": "acme"}, timestamp=now())
-)
-trace.tool_results.append(
-    ToolResult(call_id="c1", tool_name="search", output="...", timestamp=now())
+trace = builder.build()
+```
+
+Fluent chaining is supported:
+
+```python
+trace = (
+    TraceBuilder(run_id="run-123")
+    .record_routing("supervisor", "researcher")
+    .record_tool_call("search", call_id="c1", args={"q": "acme"})
+    .record_tool_result("c1", "search", output="found acme corp")
+    .build()
 )
 ```
+
+Build from an existing trace (adds more events on top):
+
+```python
+builder = TraceBuilder.from_trace(existing_trace)
+builder.record_error("TimeoutError", "search timed out", agent_name="researcher")
+updated_trace = builder.build()
+```
+
+Merge a child subgraph's trace into a parent:
+
+```python
+merged_trace = TraceBuilder.merge(parent_trace, child_trace).build()
+```
+
+`build()` is non-destructive — the builder is not consumed and can be called
+multiple times to produce independent snapshots.
 
 What the trace can hold:
 
@@ -76,6 +101,9 @@ What the trace can hold:
 | `artifacts` | Concrete outputs produced |
 | `errors` | Raised errors |
 | `token_usage` | Total tokens, if you track them |
+
+If you prefer to construct the Pydantic model directly, import `ExecutionTrace`
+and append to its lists yourself — `TraceBuilder` is a convenience wrapper.
 
 Using LangGraph? Build the trace automatically from graph state — see
 [LangGraph](langgraph.md).

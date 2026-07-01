@@ -4,12 +4,14 @@ from .schema.decisions import TriggerResult, JudgeFinding, ValidatorResult, Vali
 from .triggers.base import BaseTrigger
 from .validators.base import BaseValidator
 from .policies.base import BasePolicy
+from .trace_builder import TraceBuilder
 
 __version__ = "0.1.0a1"
 
 __all__ = [
     "RuntimeValidator",
     "ExecutionTrace",
+    "TraceBuilder",
     "TriggerResult",
     "JudgeFinding",
     "ValidatorResult",
