@@ -311,6 +311,55 @@ If you build a custom `trace_builder`, make sure your builder preserves
 `state[trace_key]["metadata"]` (if the key already holds a serialized trace)
 so the budget counter survives checkpoints.
 
+## LangChain messages adapter
+
+Many LangGraph projects keep their execution history in `state["messages"]` as a
+list of LangChain `BaseMessage` objects. `from_langchain_messages` turns that
+list directly into an `ExecutionTrace` — no LangChain import required.
+
+```python
+from agent_runtime_validator.integrations.langgraph import from_langchain_messages
+```
+
+### Mapping rules
+
+| LangChain type | Produces |
+|---|---|
+| `HumanMessage` (`type="human"`) | `MessageEvent(role="user")` |
+| `AIMessage` (`type="ai"`) | `MessageEvent(role="assistant")` + `ToolCall` per `tool_calls` entry |
+| `SystemMessage` (`type="system"`) | `MessageEvent(role="system")` |
+| `ToolMessage` (`type="tool"`) | `MessageEvent(role="tool")` + `ToolResult` |
+| Any other type | `MessageEvent(role="assistant")` |
+
+### Usage as a `trace_builder` callback
+
+Pass it as `trace_builder` to `ValidationNode` so the node converts
+`state["messages"]` on every call:
+
+```python
+from agent_runtime_validator.integrations.langgraph import (
+    ValidationNode,
+    from_langchain_messages,
+)
+from agent_runtime_validator.schema.trace import ExecutionTrace
+
+def build_trace(state: dict) -> ExecutionTrace:
+    return from_langchain_messages(
+        state["messages"],
+        run_id=state.get("run_id", "run"),
+        agent_name="research_agent",
+    )
+
+node = ValidationNode(triggers=[...], trace_builder=build_trace)
+```
+
+### Limitations
+
+`from_langchain_messages` only maps messages, tool calls, and tool results.
+Routing events and agent calls must be recorded explicitly (e.g. via
+`TraceBuilder`) because no reliable convention exists for expressing them
+inside a plain message list.
+
 ## Related
 
 - [Overview](overview.md)
