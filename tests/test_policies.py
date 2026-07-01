@@ -148,3 +148,58 @@ def test_critical_cannot_be_downgraded():
     )
     decision = policy.decide(make_trace(), [_fired("T", "critical")], vr)
     assert decision.action == "abort"
+
+
+# ---------------------------------------------------------------------------
+# No-trigger escalation (final_gate use case)
+# ---------------------------------------------------------------------------
+
+def test_no_triggers_validator_escalation_abort():
+    """Validator recommends abort even though no trigger fired — policy honors it."""
+    policy = DefaultPolicy()
+    vr = ValidatorResult(
+        valid=False, confidence=0.9, recommendation="abort", reason="quality gate failed"
+    )
+    decision = policy.decide(make_trace(), [], vr)
+    assert decision.action == "abort"
+    assert decision.should_continue is False
+    assert decision.validator_result is vr
+
+
+def test_no_triggers_validator_escalation_interrupt():
+    policy = DefaultPolicy()
+    vr = ValidatorResult(
+        valid=False, confidence=0.8, recommendation="interrupt", reason="suspicious"
+    )
+    decision = policy.decide(make_trace(), [], vr)
+    assert decision.action == "interrupt"
+    assert decision.triggered_by == []
+
+
+def test_no_triggers_validator_continue_stays_continue():
+    """Validator says continue and no triggers fired — decision is continue."""
+    policy = DefaultPolicy()
+    vr = ValidatorResult(
+        valid=True, confidence=0.99, recommendation="continue", reason="all good"
+    )
+    decision = policy.decide(make_trace(), [], vr)
+    assert decision.action == "continue"
+    assert decision.should_continue is True
+
+
+def test_no_triggers_validator_result_preserved():
+    """validator_result is always attached to the decision even without triggers."""
+    policy = DefaultPolicy()
+    vr = ValidatorResult(
+        valid=True, confidence=0.99, recommendation="continue", reason="ok"
+    )
+    decision = policy.decide(make_trace(), [], vr)
+    assert decision.validator_result is vr
+
+
+def test_no_triggers_none_validator_result_continues():
+    """No triggers fired and validator_result=None → continue (checkpoint mode)."""
+    policy = DefaultPolicy()
+    decision = policy.decide(make_trace(), [], None)
+    assert decision.action == "continue"
+    assert decision.validator_result is None

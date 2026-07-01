@@ -15,17 +15,23 @@ ExecutionTrace
 [ Triggers ]      evaluate(trace) -> TriggerResult        (always run, deterministic)
       |
       v
-  any fired? --no--> [ Policy ]
-      |
-     yes (and validator is not NoOp, and call budget allows)
-      |
-      v
-[ Validator ]     validate(trace, results) -> ValidatorResult   (optional, may call LLM)
-      |
-      | skipped when budget exhausted with on_validator_budget_exhausted="skip"
-      |
-      v
-[ Policy ]        decide(...) -> ValidationDecision
+  validator_mode == "checkpoint"?
+      |                   |
+     yes                  no ("final_gate")
+      |                   |
+  any fired?              |
+   |       |              |
+  yes      no (skip)      |
+   |                      |
+   +---------- and validator is not NoOp, and call budget allows ----------+
+                          |
+                          v
+               [ Validator ]     validate(trace, results) -> ValidatorResult
+                          |
+                          | skipped when budget exhausted with on_validator_budget_exhausted="skip"
+                          |
+                          v
+[ Policy ]        decide(trace, trigger_results, validator_result) -> ValidationDecision
       |
       v
 ValidationDecision
@@ -102,14 +108,17 @@ are required.
 ## RuntimeValidator internals
 
 `RuntimeValidator(triggers, validator=None, policy=None, ...)` defaults to
-`NoOpValidator`, `DefaultPolicy`, unlimited validator invocations
-(`max_validator_calls_per_run=None`), and skip-on-budget-exhaustion
-(`on_validator_budget_exhausted="skip"`). Both `validate` and `validate_async`:
+`NoOpValidator`, `DefaultPolicy`, `validator_mode="checkpoint"`, unlimited
+validator invocations (`max_validator_calls_per_run=None`), and
+skip-on-budget-exhaustion (`on_validator_budget_exhausted="skip"`). Both
+`validate` and `validate_async`:
 
 1. Run every trigger to build `trigger_results`.
 2. Compute `fired = [r for r in trigger_results if r.triggered]`.
-3. Invoke the validator **only** if `fired`, the validator is not a
-   `NoOpValidator`, and `max_validator_calls_per_run` has not been exhausted.
+3. Decide whether to invoke the validator:
+   - If the validator is `NoOpValidator`: skip always.
+   - `validator_mode="checkpoint"` (default): skip when no triggers fired.
+   - `validator_mode="final_gate"`: always invoke (budget permitting).
 4. If the validator budget is exhausted, either pass `validator_result=None`
    (`on_validator_budget_exhausted="skip"`) or pass a synthetic
    `ValidatorResult` with the configured recommendation.
@@ -122,10 +131,7 @@ healthy path performs no extra work. Validator call budget state is kept in
 
 ## How actions are chosen
 
-`DefaultPolicy` picks the highest fired severity, then maps it to an action. A
-validator's `recommendation`, when present, can escalate this default. Downgrades
-are blocked unless `allow_validator_downgrade=True` and the validator confidence
-meets `min_confidence_for_override`; critical severity cannot be downgraded.
+`DefaultPolicy` picks the highest fired severity, then maps it to an action.
 
 | Severity | Default action | Disabled-toggle fallback |
 |----------|----------------|--------------------------|
@@ -134,7 +140,17 @@ meets `min_confidence_for_override`; critical severity cannot be downgraded.
 | `high` | `interrupt` | `continue` (`interrupt_on_high=False`) |
 | `critical` | `abort` | `interrupt` (`abort_on_critical=False`) |
 
-When no trigger fires, the decision is always `continue`.
+**Validator escalation** — a validator's `recommendation` can raise the
+action above the severity default. Escalation is always accepted.
+
+**Validator downgrade** — a validator recommending a less severe action than
+the trigger-derived default is blocked unless `allow_validator_downgrade=True`
+and `validator_result.confidence >= min_confidence_for_override`. Critical
+severity can never be downgraded.
+
+**When no trigger fires** — if the validator ran (e.g. `validator_mode="final_gate"`)
+and recommends something other than `"continue"`, that recommendation is used.
+Otherwise the decision is `continue`.
 
 ## Package structure
 
