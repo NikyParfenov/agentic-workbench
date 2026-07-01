@@ -241,6 +241,8 @@ Calling sync `validate()` with an async model raises `RuntimeError` with a clear
 message pointing to `validate_async`. The async registration sidesteps this
 entirely.
 
+> For a final quality gate before formatting the user-facing answer, see [`examples/langgraph_final_gate_formatter.py`](../../examples/langgraph_final_gate_formatter.py).
+
 ## Trace persistence and archiving
 
 `ValidationNode` writes the resolved `ExecutionTrace` back into state on every
