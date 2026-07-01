@@ -18,17 +18,17 @@ predictable makes the common "healthy run" path fast and testable.
 live in a trigger; it must be expressed as a validator that runs after a trigger
 fires.
 
-## 2026-06-28 — Validators run only when a trigger fires (checkpoint mode)
+## 2026-06-28 — Validators run only when a trigger fires (on_trigger mode)
 
-**Decision:** In `validator_mode="checkpoint"` (the default), the validator
+**Decision:** In `validator_mode="on_trigger"` (the default), the validator
 stage executes only if at least one trigger fired and the configured validator
 is not `NoOpValidator`.
 
 **Reason:** Deep checks — especially LLM judges — are expensive. There is no
 value in running them when nothing looks wrong.
 
-**Consequences:** A validator never sees a fully healthy run in checkpoint mode.
-Checks that must run unconditionally should use `validator_mode="final_gate"`
+**Consequences:** A validator never sees a fully healthy run in on_trigger mode.
+Checks that must run unconditionally should use `validator_mode="always"`
 (see below) or be modeled as a trigger alone.
 
 ## 2026-06-28 — The pipeline does not short-circuit
@@ -120,9 +120,9 @@ traces must write the updated trace back into state.
 
 ## 2026-07-01 — validator_mode separates mid-run monitoring from post-run quality gates
 
-**Decision:** `RuntimeValidator` exposes `validator_mode: Literal["checkpoint",
-"final_gate"]`. `"checkpoint"` (default) preserves the original behavior —
-validator only runs when a trigger fires. `"final_gate"` always invokes the
+**Decision:** `RuntimeValidator` exposes `validator_mode: Literal["on_trigger",
+"always"]`. `"on_trigger"` (default) preserves the original behavior —
+validator only runs when a trigger fires. `"always"` always invokes the
 validator, making it a mandatory inspection on every completed trace.
 
 **Reason:** Not all validators are anomaly detectors. An LLM quality judge that
@@ -132,8 +132,8 @@ on/off switch would force users to either skip the final check or add dummy
 triggers.
 
 **Consequences:** `DefaultPolicy` was updated to honour validator escalations
-when no triggers fired, so that `final_gate` verdicts actually affect the
-decision. In `"checkpoint"` mode this change is backward-compatible because the
+when no triggers fired, so that `"always"` verdicts actually affect the
+decision. In `"on_trigger"` mode this change is backward-compatible because the
 validator is never called on clean traces (so `validator_result` is `None` in the
 no-trigger branch and the policy behaves identically).
 

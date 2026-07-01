@@ -15,9 +15,9 @@ ExecutionTrace
 [ Triggers ]      evaluate(trace) -> TriggerResult        (always run, deterministic)
       |
       v
-  validator_mode == "checkpoint"?
+  validator_mode == "on_trigger"?
       |                   |
-     yes                  no ("final_gate")
+     yes                  no ("always")
       |                   |
   any fired?              |
    |       |              |
@@ -108,7 +108,7 @@ are required.
 ## RuntimeValidator internals
 
 `RuntimeValidator(triggers, validator=None, policy=None, ...)` defaults to
-`NoOpValidator`, `DefaultPolicy`, `validator_mode="checkpoint"`, unlimited
+`NoOpValidator`, `DefaultPolicy`, `validator_mode="on_trigger"`, unlimited
 validator invocations (`max_validator_calls_per_run=None`), and
 skip-on-budget-exhaustion (`on_validator_budget_exhausted="skip"`). Both
 `validate` and `validate_async`:
@@ -117,8 +117,8 @@ skip-on-budget-exhaustion (`on_validator_budget_exhausted="skip"`). Both
 2. Compute `fired = [r for r in trigger_results if r.triggered]`.
 3. Decide whether to invoke the validator:
    - If the validator is `NoOpValidator`: skip always.
-   - `validator_mode="checkpoint"` (default): skip when no triggers fired.
-   - `validator_mode="final_gate"`: always invoke (budget permitting).
+   - `validator_mode="on_trigger"` (default): skip when no triggers fired.
+   - `validator_mode="always"`: always invoke (budget permitting).
 4. If the validator budget is exhausted, either pass `validator_result=None`
    (`on_validator_budget_exhausted="skip"`) or pass a synthetic
    `ValidatorResult` with the configured recommendation.
@@ -148,7 +148,7 @@ the trigger-derived default is blocked unless `allow_validator_downgrade=True`
 and `validator_result.confidence >= min_confidence_for_override`. Critical
 severity can never be downgraded.
 
-**When no trigger fires** — if the validator ran (e.g. `validator_mode="final_gate"`)
+**When no trigger fires** — if the validator ran (e.g. `validator_mode="always"`)
 and recommends something other than `"continue"`, that recommendation is used.
 Otherwise the decision is `continue`.
 

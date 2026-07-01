@@ -305,8 +305,8 @@ class _CountingValidator(BaseValidator):
         )
 
 
-def test_validation_node_default_validator_mode_is_checkpoint():
-    """Default mode is checkpoint: validator is NOT called when no triggers fire."""
+def test_validation_node_default_validator_mode_is_on_trigger():
+    """Default mode is on_trigger: validator is NOT called when no triggers fire."""
     validator = _CountingValidator()
     # MaxRoutesTrigger(max_routes=100) will not fire for a trace with 0 routing events
     node = ValidationNode(
@@ -320,13 +320,13 @@ def test_validation_node_default_validator_mode_is_checkpoint():
     assert validator.call_count == 0
 
 
-def test_validation_node_final_gate_invokes_validator_without_trigger():
-    """final_gate mode: validator IS called even when no triggers fire."""
+def test_validation_node_always_invokes_validator_without_trigger():
+    """always mode: validator IS called even when no triggers fire."""
     validator = _CountingValidator()
     node = ValidationNode(
         triggers=[MaxRoutesTrigger(max_routes=100)],
         validator=validator,
-        validator_mode="final_gate",
+        validator_mode="always",
     )
     trace = make_trace()  # no routing events — trigger won't fire
     state = {"trace": trace}
@@ -335,13 +335,13 @@ def test_validation_node_final_gate_invokes_validator_without_trigger():
     assert result["decision"].action is not None
 
 
-async def test_validation_node_final_gate_async_invokes_validator_without_trigger():
-    """final_gate mode via async_call: validator IS called even when no triggers fire."""
+async def test_validation_node_always_async_invokes_validator_without_trigger():
+    """always mode via async_call: validator IS called even when no triggers fire."""
     validator = _CountingValidator()
     node = ValidationNode(
         triggers=[MaxRoutesTrigger(max_routes=100)],
         validator=validator,
-        validator_mode="final_gate",
+        validator_mode="always",
     )
     trace = make_trace()  # no routing events — trigger won't fire
     state = {"trace": trace}

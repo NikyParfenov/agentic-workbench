@@ -1,7 +1,7 @@
 """Final-gate validation before a ResponseBuilder node — LangGraph example.
 
 Graph shape:
-    Planner → Analyst → ValidationNode(validator_mode="final_gate")
+    Planner → Analyst → ValidationNode(validator_mode="always")
                             ├── continue  → ResponseBuilder → END
                             ├── reroute   → Planner
                             └── interrupt / abort → Stop
@@ -163,7 +163,7 @@ def build_graph():
     validation_node = ValidationNode(
         triggers=[SameToolLoopTrigger(max_repeats=5)],
         validator=_StubValidator(),
-        validator_mode="final_gate",
+        validator_mode="always",
         max_validator_calls_per_run=None,
     )
 

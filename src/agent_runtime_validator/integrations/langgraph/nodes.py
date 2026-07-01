@@ -92,7 +92,7 @@ class ValidationNode:
         decision_key: str = "decision",
         max_validator_calls_per_run: int | None = None,
         on_validator_budget_exhausted: OnValidatorBudgetExhausted = "skip",
-        validator_mode: ValidatorMode = "checkpoint",
+        validator_mode: ValidatorMode = "on_trigger",
         trace_builder: TraceBuilderFn | None = None,
     ):
         self._runtime = RuntimeValidator(

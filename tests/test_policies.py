@@ -151,7 +151,7 @@ def test_critical_cannot_be_downgraded():
 
 
 # ---------------------------------------------------------------------------
-# No-trigger escalation (final_gate use case)
+# No-trigger escalation (always mode use case)
 # ---------------------------------------------------------------------------
 
 def test_no_triggers_validator_escalation_abort():
@@ -198,7 +198,7 @@ def test_no_triggers_validator_result_preserved():
 
 
 def test_no_triggers_none_validator_result_continues():
-    """No triggers fired and validator_result=None → continue (checkpoint mode)."""
+    """No triggers fired and validator_result=None → continue (on_trigger mode)."""
     policy = DefaultPolicy()
     decision = policy.decide(make_trace(), [], None)
     assert decision.action == "continue"

@@ -9,7 +9,7 @@ with trigger severity safeguards.
 
 ## When a validator runs
 
-The default `"checkpoint"` mode invokes the validator only when all three are
+The default `"on_trigger"` mode invokes the validator only when all three are
 true:
 
 1. At least one trigger fired,
@@ -19,7 +19,7 @@ true:
 This keeps the healthy path free of extra work. If you pass no validator, the
 runtime uses `NoOpValidator` and skips the stage entirely.
 
-Use `validator_mode="final_gate"` to always invoke the validator (see below).
+Use `validator_mode="always"` to always invoke the validator (see below).
 
 Import validators from `agent_runtime_validator.validators`.
 
@@ -29,8 +29,8 @@ Import validators from `agent_runtime_validator.validators`.
 
 | Mode | Validator called when… |
 |------|------------------------|
-| `"checkpoint"` (default) | At least one trigger fired |
-| `"final_gate"` | Always — regardless of trigger results |
+| `"on_trigger"` (default) | At least one trigger fired |
+| `"always"` | Always — regardless of trigger results |
 
 ```python
 from agent_runtime_validator import RuntimeValidator, ValidatorMode
@@ -40,31 +40,31 @@ from agent_runtime_validator.validators import LLMJudgeValidator
 runtime = RuntimeValidator(
     triggers=[...],               # triggers still run as usual
     validator=LLMJudgeValidator(model=call_model),
-    validator_mode="final_gate",
+    validator_mode="always",
 )
 decision = runtime.validate(completed_trace)
 ```
 
-**`"checkpoint"` (default)** — the validator is the optional deep-check that
+**`"on_trigger"` (default)** — the validator is the optional deep-check that
 runs only when something already looks wrong. The common "all-clear" path never
 calls the validator. Use this for inline mid-run monitoring.
 
-**`"final_gate"`** — the validator always runs, making it a mandatory inspection
+**`"always"`** — the validator always runs, making it a mandatory inspection
 step. Use this when you want an LLM judge (or schema validator) to review every
 completed trace, not just ones that tripped a trigger.
 
-### final_gate + DefaultPolicy
+### always + DefaultPolicy
 
-When `validator_mode="final_gate"` and the validator recommends stopping
+When `validator_mode="always"` and the validator recommends stopping
 (anything other than `"continue"`), `DefaultPolicy` honors that recommendation
 even if no triggers fired. If triggers also fired, the higher severity of the
 two wins.
 
-### final_gate + budget
+### always + budget
 
-`max_validator_calls_per_run` still applies in `"final_gate"` mode. Once the
+`max_validator_calls_per_run` still applies in `"always"` mode. Once the
 budget is exhausted, `on_validator_budget_exhausted` controls the fallback —
-exactly the same as in `"checkpoint"` mode.
+exactly the same as in `"on_trigger"` mode.
 
 ## Built-in validators
 

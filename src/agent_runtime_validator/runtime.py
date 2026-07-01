@@ -25,14 +25,14 @@ OnValidatorBudgetExhausted = Literal[
 
 _VALID_ON_EXHAUSTED = frozenset(get_args(OnValidatorBudgetExhausted))
 
-ValidatorMode = Literal["checkpoint", "final_gate"]
+ValidatorMode = Literal["on_trigger", "always"]
 """Controls when the validator is invoked.
 
-``"checkpoint"`` (default): validator only runs when at least one trigger fires.
+``"on_trigger"`` (default): validator only runs when at least one trigger fires.
 Use this for inline mid-run monitoring — the common "all-clear" path never calls
 the validator.
 
-``"final_gate"``: validator always runs, regardless of trigger results.
+``"always"``: validator always runs, regardless of trigger results.
 Use this when the validator is a post-run quality check that should inspect
 every completed trace, even clean ones.
 """
@@ -48,7 +48,7 @@ class RuntimeValidator:
         policy: BasePolicy | None = None,
         max_validator_calls_per_run: int | None = None,
         on_validator_budget_exhausted: OnValidatorBudgetExhausted = "skip",
-        validator_mode: ValidatorMode = "checkpoint",
+        validator_mode: ValidatorMode = "on_trigger",
     ) -> None:
         if max_validator_calls_per_run is not None and max_validator_calls_per_run < 0:
             raise ValueError("max_validator_calls_per_run must be >= 0")
@@ -120,7 +120,7 @@ class RuntimeValidator:
     def _should_invoke_validator(self, fired: list) -> bool:
         if isinstance(self.validator, NoOpValidator):
             return False
-        if self.validator_mode == "final_gate":
+        if self.validator_mode == "always":
             return True
         return bool(fired)
 

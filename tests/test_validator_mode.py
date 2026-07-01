@@ -1,4 +1,4 @@
-"""Tests for validator_mode ("checkpoint" vs "final_gate")."""
+"""Tests for validator_mode ("on_trigger" vs "always")."""
 
 import os
 import sys
@@ -26,20 +26,20 @@ def _counting_model(responses: list[str]):
 
 
 # ---------------------------------------------------------------------------
-# Default mode is "checkpoint"
+# Default mode is "on_trigger"
 # ---------------------------------------------------------------------------
 
-def test_default_mode_is_checkpoint():
+def test_default_mode_is_on_trigger():
     rv = RuntimeValidator(triggers=[])
-    assert rv.validator_mode == "checkpoint"
+    assert rv.validator_mode == "on_trigger"
 
 
-def test_checkpoint_validator_not_called_when_no_triggers_fire():
+def test_on_trigger_validator_not_called_when_no_triggers_fire():
     model, calls = _counting_model([_ABORT_JSON])
     rv = RuntimeValidator(
         triggers=[],  # nothing can fire
         validator=LLMJudgeValidator(model=model),
-        validator_mode="checkpoint",
+        validator_mode="on_trigger",
     )
     trace = make_trace()
     decision = rv.validate(trace)
@@ -47,12 +47,12 @@ def test_checkpoint_validator_not_called_when_no_triggers_fire():
     assert decision.action == "continue"
 
 
-def test_checkpoint_validator_called_when_trigger_fires():
+def test_on_trigger_validator_called_when_trigger_fires():
     model, calls = _counting_model([_ABORT_JSON])
     rv = RuntimeValidator(
         triggers=[__import__("agent_runtime_validator.triggers", fromlist=["MaxRoutesTrigger"]).MaxRoutesTrigger(max_routes=1)],
         validator=LLMJudgeValidator(model=model),
-        validator_mode="checkpoint",
+        validator_mode="on_trigger",
     )
     trace = make_trace(routing_events=[make_routing_event("A", "B")])
     decision = rv.validate(trace)
@@ -61,27 +61,27 @@ def test_checkpoint_validator_called_when_trigger_fires():
 
 
 # ---------------------------------------------------------------------------
-# final_gate mode
+# always mode
 # ---------------------------------------------------------------------------
 
-def test_final_gate_validator_called_even_when_no_triggers_fire():
+def test_always_validator_called_even_when_no_triggers_fire():
     model, calls = _counting_model([_CONTINUE_JSON])
     rv = RuntimeValidator(
         triggers=[],  # no triggers
         validator=LLMJudgeValidator(model=model),
-        validator_mode="final_gate",
+        validator_mode="always",
     )
     trace = make_trace()
     rv.validate(trace)
     assert len(calls) == 1
 
 
-def test_final_gate_validator_escalates_on_no_trigger_signal():
+def test_always_validator_escalates_on_no_trigger_signal():
     model, calls = _counting_model([_ABORT_JSON])
     rv = RuntimeValidator(
         triggers=[],
         validator=LLMJudgeValidator(model=model),
-        validator_mode="final_gate",
+        validator_mode="always",
     )
     trace = make_trace()
     decision = rv.validate(trace)
@@ -90,12 +90,12 @@ def test_final_gate_validator_escalates_on_no_trigger_signal():
     assert decision.validator_result.recommendation == "abort"
 
 
-def test_final_gate_validator_continue_on_clean_trace():
+def test_always_validator_continue_on_clean_trace():
     model, calls = _counting_model([_CONTINUE_JSON])
     rv = RuntimeValidator(
         triggers=[],
         validator=LLMJudgeValidator(model=model),
-        validator_mode="final_gate",
+        validator_mode="always",
     )
     trace = make_trace()
     decision = rv.validate(trace)
@@ -103,12 +103,12 @@ def test_final_gate_validator_continue_on_clean_trace():
     assert decision.validator_result is not None
 
 
-def test_final_gate_noop_validator_never_invoked():
+def test_always_noop_validator_never_invoked():
     from agent_runtime_validator.validators.noop import NoOpValidator
     rv = RuntimeValidator(
         triggers=[],
         validator=None,  # defaults to NoOpValidator
-        validator_mode="final_gate",
+        validator_mode="always",
     )
     trace = make_trace()
     decision = rv.validate(trace)
@@ -116,12 +116,12 @@ def test_final_gate_noop_validator_never_invoked():
     assert decision.action == "continue"
 
 
-def test_final_gate_budget_still_applies():
+def test_always_budget_still_applies():
     model, calls = _counting_model([_CONTINUE_JSON])
     rv = RuntimeValidator(
         triggers=[],
         validator=LLMJudgeValidator(model=model),
-        validator_mode="final_gate",
+        validator_mode="always",
         max_validator_calls_per_run=1,
         on_validator_budget_exhausted="skip",
     )
@@ -131,12 +131,12 @@ def test_final_gate_budget_still_applies():
     assert len(calls) == 1  # validator only called once
 
 
-def test_final_gate_budget_exhausted_skip():
+def test_always_budget_exhausted_skip():
     model, calls = _counting_model([_ABORT_JSON])
     rv = RuntimeValidator(
         triggers=[],
         validator=LLMJudgeValidator(model=model),
-        validator_mode="final_gate",
+        validator_mode="always",
         max_validator_calls_per_run=0,
         on_validator_budget_exhausted="skip",
     )
@@ -147,10 +147,10 @@ def test_final_gate_budget_exhausted_skip():
 
 
 # ---------------------------------------------------------------------------
-# final_gate async path
+# always async path
 # ---------------------------------------------------------------------------
 
-async def test_final_gate_async_validator_always_called():
+async def test_always_async_validator_called():
     calls: list[str] = []
 
     async def async_model(prompt: str) -> str:
@@ -160,7 +160,7 @@ async def test_final_gate_async_validator_always_called():
     rv = RuntimeValidator(
         triggers=[],
         validator=LLMJudgeValidator(model=async_model),
-        validator_mode="final_gate",
+        validator_mode="always",
     )
     trace = make_trace()
     decision = await rv.validate_async(trace)
