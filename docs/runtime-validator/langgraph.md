@@ -362,6 +362,49 @@ Routing events and agent calls must be recorded explicitly (e.g. via
 `TraceBuilder`) because no reliable convention exists for expressing them
 inside a plain message list.
 
+## Subgraph thoughts adapter
+
+Some LangGraph subgraphs surface their internal reasoning as a list of plain
+strings (thought logs, print-style traces). `from_subgraph_thoughts` turns that
+list directly into an `ExecutionTrace` — no LangChain import required.
+
+```python
+from agent_runtime_validator.integrations.langgraph import from_subgraph_thoughts
+
+trace = from_subgraph_thoughts(
+    state.get("subgraph_thoughts", []),
+    run_id=state.get("run_id", "subgraph-run"),
+    agent_name="analyst",
+)
+```
+
+### What it does
+
+- Every line is preserved as a `MessageEvent(role="assistant")`.
+- Lines that match known tool-call patterns additionally produce a `ToolCall`.
+- Lines that match known tool-result patterns additionally produce a `ToolResult`.
+- `ToolResult` entries are matched to `ToolCall` entries by bracket id (`[c1]`)
+  when present, or by the latest unmatched call when exactly one is pending.
+
+### Supported line patterns
+
+```
+Tool call [c1] analyze_item with arguments: {"item_id": "demo-item"}
+Tool call analyze_item with arguments: {"item_id": "demo-item"}
+Calling tool analyze_item with args {"item_id": "demo-item"}
+Tool result [c1]: {"status": "ok"}
+Tool response [c1]: done
+Tool output [c1]: done
+```
+
+### Limitations
+
+- Best-effort parser — unrecognised lines produce a message only, never an error.
+- Original lines are always preserved as messages; nothing is discarded.
+- Routing events and agent calls are never inferred from thought text. Use
+  `TraceBuilder.record_routing` / `record_agent_call` to record those events
+  explicitly.
+
 ## Related
 
 - [Overview](overview.md)
