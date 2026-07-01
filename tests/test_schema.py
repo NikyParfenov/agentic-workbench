@@ -8,13 +8,13 @@ from agent_runtime_validator.schema.decisions import (
 
 def test_tool_call_requires_fields():
     call = ToolCall(
-        tool_name="search_gene",
+        tool_name="lookup_record",
         call_id="c1",
-        args={"gene": "TP53"},
+        args={"record_id": "demo-record"},
         timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
     )
-    assert call.tool_name == "search_gene"
-    assert call.args == {"gene": "TP53"}
+    assert call.tool_name == "lookup_record"
+    assert call.args == {"record_id": "demo-record"}
     assert call.metadata == {}
 
 

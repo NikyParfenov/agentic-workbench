@@ -26,7 +26,7 @@ def build_trace() -> ExecutionTrace:
     for i in range(4):
         call_id = f"c{i + 1}"
         trace.tool_calls.append(
-            ToolCall(tool_name="search", call_id=call_id, args={"q": "acme"}, timestamp=now())
+            ToolCall(tool_name="search", call_id=call_id, args={"query": "demo-topic"}, timestamp=now())
         )
         trace.tool_results.append(
             ToolResult(call_id=call_id, tool_name="search", output="no results", timestamp=now())

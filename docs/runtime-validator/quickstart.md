@@ -54,9 +54,9 @@ builder = TraceBuilder(run_id="run-123")
 
 # As the agent acts, record events:
 builder.record_routing("supervisor", "researcher", reason="delegate research")
-builder.record_tool_call("search", call_id="c1", args={"q": "acme"})
-builder.record_tool_result("c1", "search", output="found acme corp")
-builder.record_message("assistant", "I found the company.")
+builder.record_tool_call("search", call_id="c1", args={"query": "demo-topic"})
+builder.record_tool_result("c1", "search", output="found result")
+builder.record_message("assistant", "I found the result.")
 
 trace = builder.build()
 ```
@@ -67,8 +67,8 @@ Fluent chaining is supported:
 trace = (
     TraceBuilder(run_id="run-123")
     .record_routing("supervisor", "researcher")
-    .record_tool_call("search", call_id="c1", args={"q": "acme"})
-    .record_tool_result("c1", "search", output="found acme corp")
+    .record_tool_call("search", call_id="c1", args={"query": "demo-topic"})
+    .record_tool_result("c1", "search", output="found result")
     .build()
 )
 ```
@@ -143,7 +143,7 @@ from agent_runtime_validator.validators import TriggerScoreValidator
 
 validator = RuntimeValidator(
     triggers=[
-        NoToolUsageTrigger(watched_agents={"bio_agent"}),
+        NoToolUsageTrigger(watched_agents={"research_agent"}),
         NoProgressTrigger(min_tool_calls=3),
         AgentPingPongTrigger(max_cycles=2),
     ],

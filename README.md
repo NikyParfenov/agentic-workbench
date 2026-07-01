@@ -194,22 +194,49 @@ The node reads `state["trace"]` (an `ExecutionTrace`) and writes `state["decisio
 
 ## Trigger Reference
 
+Triggers are grouped by the trace event type they inspect.
+
+### Tool and artifact triggers
+
 ```python
 from agent_runtime_validator.triggers import (
-    MaxToolCallsTrigger,          # too many tool calls total
-    MaxRoutesTrigger,             # too many agent hops
+    MaxToolCallsTrigger,          # too many ToolCall entries
+    SameToolLoopTrigger,          # same tool repeated N times
+    SameToolSameArgsLoopTrigger,  # exact same ToolCall repeated
+    NoProgressTrigger,            # many ToolCall entries, no ArtifactEvent entries
+    ToolErrorRateTrigger,         # ToolResult error rate above threshold
+    NoToolUsageTrigger,           # watched agents have too few ToolCall entries
+)
+```
+
+### Routing triggers
+
+```python
+from agent_runtime_validator.triggers import (
+    MaxRoutesTrigger,             # too many RoutingEvent entries
+    AgentPingPongTrigger,         # alternating RoutingEvent A→B→A→B
+)
+```
+
+### Agent-call triggers
+
+Use these when your trace records semantic subagent calls as `AgentCall` events.
+If you only record routing and tool events, you can ignore this group.
+
+```python
+from agent_runtime_validator.triggers import (
+    MaxAgentCallsTrigger,         # too many AgentCall entries
+    AgentDelegationLoopTrigger,   # repeated AgentCall caller→callee pair
+    SubagentNoOutputTrigger,      # AgentCall recorded with output=None
+)
+```
+
+### Budget triggers
+
+```python
+from agent_runtime_validator.triggers import (
     MaxContextTokensTrigger,      # token budget exceeded
     MaxExecutionTimeTrigger,      # wall-clock time limit
-    SameToolLoopTrigger,          # same tool repeated N times
-    SameToolSameArgsLoopTrigger,  # exact same call repeated
-    AgentPingPongTrigger,         # A→B→A→B routing pattern
-    NoProgressTrigger,            # many tool calls, no artifacts
-    ToolErrorRateTrigger,         # error rate above threshold
-    NoToolUsageTrigger,           # watched agents made no tool calls
-    # Supervisor / subgraph triggers
-    MaxAgentCallsTrigger,         # too many agent-to-agent delegations
-    AgentDelegationLoopTrigger,   # same (caller, callee) pair repeated
-    SubagentNoOutputTrigger,      # subagent returned no output
 )
 ```
 
@@ -224,10 +251,10 @@ validator = RuntimeValidator(
     triggers=[SameToolLoopTrigger(max_repeats=3)],
     validator=ToolArgumentValidator(
         arg_schemas={
-            "search_gene": {
+            "lookup_record": {
                 "type": "object",
-                "properties": {"gene": {"type": "string"}},
-                "required": ["gene"],
+                "properties": {"record_id": {"type": "string"}},
+                "required": ["record_id"],
                 "additionalProperties": False,
             }
         },

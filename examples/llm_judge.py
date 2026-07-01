@@ -28,16 +28,16 @@ def stub_model(prompt: str) -> str:
             "valid": False,
             "confidence": 0.9,
             "recommendation": "interrupt",
-            "issues": ["search_gene called 3x with identical args"],
+            "issues": ["lookup_record called 3x with identical args"],
             "findings": [
                 {
                     "category": "repeated_tool_call",
                     "severity": "high",
                     "confidence": 0.95,
-                    "summary": "search_gene called 3 times with identical args {'gene': 'TP53'}.",
-                    "evidence": ["call c1: search_gene(gene=TP53)", "call c2: same", "call c3: same"],
-                    "tool_name": "search_gene",
-                    "suggested_fix": "Try a different gene identifier or check upstream data.",
+                    "summary": "lookup_record called 3 times with identical args {'record_id': 'demo-record'}.",
+                    "evidence": ["call c1: lookup_record(record_id=demo-record)", "call c2: same", "call c3: same"],
+                    "tool_name": "lookup_record",
+                    "suggested_fix": "Try a different record identifier or check upstream data.",
                 },
                 {
                     "category": "no_progress",
@@ -49,7 +49,7 @@ def stub_model(prompt: str) -> str:
             ],
             "reason": "Agent is repeating an identical tool call without progress.",
             "suggested_next_agent": None,
-            "suggested_message": "Try a different gene identifier.",
+            "suggested_message": "Try a different record identifier.",
         }
     )
 
@@ -58,7 +58,7 @@ def build_trace() -> ExecutionTrace:
     trace = ExecutionTrace(run_id="llm-judge-demo", started_at=now())
     for i in range(3):
         trace.tool_calls.append(
-            ToolCall(tool_name="search_gene", call_id=f"c{i + 1}", args={"gene": "TP53"}, timestamp=now())
+            ToolCall(tool_name="lookup_record", call_id=f"c{i + 1}", args={"record_id": "demo-record"}, timestamp=now())
         )
     return trace
 

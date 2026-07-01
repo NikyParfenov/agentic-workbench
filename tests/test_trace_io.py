@@ -49,7 +49,7 @@ def test_trace_to_json_default_indent():
 def test_trace_from_json_roundtrip():
     original = (
         TraceBuilder(run_id="round-trip")
-        .record_tool_call("search", call_id="c1", args={"q": "acme"})
+        .record_tool_call("search", call_id="c1", args={"query": "demo-topic"})
         .record_routing("a", "b", reason="delegate")
         .build()
     )

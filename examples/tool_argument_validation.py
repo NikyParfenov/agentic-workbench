@@ -20,20 +20,20 @@ def now() -> datetime:
 
 SCHEMA = {
     "type": "object",
-    "properties": {"gene": {"type": "string"}},
-    "required": ["gene"],
+    "properties": {"record_id": {"type": "string"}},
+    "required": ["record_id"],
     "additionalProperties": False,
 }
 
 
 def build_trace() -> ExecutionTrace:
     trace = ExecutionTrace(run_id="arg-validation-demo", started_at=now())
-    # `gene` should be a string; here it is an int, which violates the schema.
+    # `record_id` should be a string; here it is an int, which violates the schema.
     trace.tool_calls.append(
-        ToolCall(tool_name="search_gene", call_id="c1", args={"gene": 12345}, timestamp=now())
+        ToolCall(tool_name="lookup_record", call_id="c1", args={"record_id": 12345}, timestamp=now())
     )
     trace.tool_results.append(
-        ToolResult(call_id="c1", tool_name="search_gene", output="...", timestamp=now())
+        ToolResult(call_id="c1", tool_name="lookup_record", output="...", timestamp=now())
     )
     return trace
 
@@ -41,7 +41,7 @@ def build_trace() -> ExecutionTrace:
 def main() -> None:
     validator = RuntimeValidator(
         triggers=[MaxToolCallsTrigger(max_calls=1)],
-        validator=ToolArgumentValidator(arg_schemas={"search_gene": SCHEMA}),
+        validator=ToolArgumentValidator(arg_schemas={"lookup_record": SCHEMA}),
     )
 
     decision = validator.validate(build_trace())

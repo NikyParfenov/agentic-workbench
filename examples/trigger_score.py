@@ -27,7 +27,7 @@ def build_trace() -> ExecutionTrace:
     trace = ExecutionTrace(run_id="score-demo", started_at=now())
     for i in range(4):
         trace.tool_calls.append(
-            ToolCall(tool_name="search", call_id=f"c{i+1}", args={"q": "acme"}, timestamp=now())
+            ToolCall(tool_name="search", call_id=f"c{i+1}", args={"query": "demo-topic"}, timestamp=now())
         )
     return trace
 
@@ -35,7 +35,7 @@ def build_trace() -> ExecutionTrace:
 def main() -> None:
     validator = RuntimeValidator(
         triggers=[
-            NoToolUsageTrigger(watched_agents={"bio_agent"}),
+            NoToolUsageTrigger(watched_agents={"research_agent"}),
             NoProgressTrigger(min_tool_calls=3),
             AgentPingPongTrigger(max_cycles=2),
         ],

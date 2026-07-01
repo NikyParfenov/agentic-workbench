@@ -87,14 +87,14 @@ from agent_runtime_validator.validators import JsonSchemaValidator
 
 validator = JsonSchemaValidator(
     arg_schemas={
-        "search_gene": {
+        "lookup_record": {
             "type": "object",
-            "properties": {"gene": {"type": "string"}},
-            "required": ["gene"],
+            "properties": {"record_id": {"type": "string"}},
+            "required": ["record_id"],
             "additionalProperties": False,
         },
     },
-    result_schemas={ "search_gene": {"type": "object"} },
+    result_schemas={ "lookup_record": {"type": "object"} },
 )
 ```
 
@@ -107,7 +107,7 @@ you only care about validating calls after the fact.
 ```python
 from agent_runtime_validator.validators import ToolArgumentValidator
 
-validator = ToolArgumentValidator(arg_schemas={"search_gene": {...}})
+validator = ToolArgumentValidator(arg_schemas={"lookup_record": {...}})
 ```
 
 > Runnable version: [`examples/tool_argument_validation.py`](../../examples/tool_argument_validation.py).
@@ -127,7 +127,7 @@ Use `TraceFormatConfig` to control those limits.
 from agent_runtime_validator.validators import LLMJudgeValidator, TraceFormatConfig
 
 judge = LLMJudgeValidator(
-    model=lambda prompt: my_client.generate(prompt),
+    model=lambda prompt: model_backend.complete(prompt),
     trace_format=TraceFormatConfig(
         max_events_per_section=100,
         max_chars_per_field=1000,

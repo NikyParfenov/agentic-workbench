@@ -23,17 +23,17 @@ def run_example() -> None:
         run_id="demo-001",
         started_at=ts,
         routing_events=[
-            RoutingEvent(from_agent="Supervisor", to_agent="BioAgent", timestamp=ts),
+            RoutingEvent(from_agent="Supervisor", to_agent="ResearchAgent", timestamp=ts),
         ],
         tool_calls=[
-            ToolCall(tool_name="search_gene", call_id="c1", args={"gene": "TP53"}, timestamp=ts),
-            ToolCall(tool_name="search_gene", call_id="c2", args={"gene": "TP53"}, timestamp=ts),
-            ToolCall(tool_name="search_gene", call_id="c3", args={"gene": "TP53"}, timestamp=ts),
+            ToolCall(tool_name="lookup_record", call_id="c1", args={"record_id": "demo-record"}, timestamp=ts),
+            ToolCall(tool_name="lookup_record", call_id="c2", args={"record_id": "demo-record"}, timestamp=ts),
+            ToolCall(tool_name="lookup_record", call_id="c3", args={"record_id": "demo-record"}, timestamp=ts),
         ],
         tool_results=[
-            ToolResult(call_id="c1", tool_name="search_gene", output="not found", timestamp=ts),
-            ToolResult(call_id="c2", tool_name="search_gene", output="not found", timestamp=ts),
-            ToolResult(call_id="c3", tool_name="search_gene", output="not found", timestamp=ts),
+            ToolResult(call_id="c1", tool_name="lookup_record", output="not found", timestamp=ts),
+            ToolResult(call_id="c2", tool_name="lookup_record", output="not found", timestamp=ts),
+            ToolResult(call_id="c3", tool_name="lookup_record", output="not found", timestamp=ts),
         ],
     )
 

@@ -46,7 +46,7 @@ def make_tool_result(
 
 def make_routing_event(
     from_agent: str = "Supervisor",
-    to_agent: str = "BioAgent",
+    to_agent: str = "ResearchAgent",
 ) -> RoutingEvent:
     return RoutingEvent(
         from_agent=from_agent,

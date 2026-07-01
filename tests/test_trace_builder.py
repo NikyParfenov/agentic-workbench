@@ -67,24 +67,24 @@ def test_record_message_appends():
 def test_record_tool_call_appends():
     trace = (
         TraceBuilder(run_id="r1")
-        .record_tool_call("search", call_id="c1", args={"q": "acme"})
+        .record_tool_call("search", call_id="c1", args={"query": "demo-topic"})
         .build()
     )
     assert len(trace.tool_calls) == 1
     tc = trace.tool_calls[0]
     assert tc.tool_name == "search"
     assert tc.call_id == "c1"
-    assert tc.args == {"q": "acme"}
+    assert tc.args == {"query": "demo-topic"}
 
 
 def test_record_tool_result_appends():
     trace = (
         TraceBuilder(run_id="r1")
-        .record_tool_result("c1", "search", output="found it")
+        .record_tool_result("c1", "search", output="found result")
         .build()
     )
     assert len(trace.tool_results) == 1
-    assert trace.tool_results[0].output == "found it"
+    assert trace.tool_results[0].output == "found result"
 
 
 def test_record_routing_appends():

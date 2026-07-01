@@ -3,8 +3,8 @@
 Usage::
 
     builder = TraceBuilder(run_id="run-123")
-    builder.record_tool_call("search", call_id="c1", args={"q": "acme"})
-    builder.record_tool_result("c1", "search", output="found it")
+    builder.record_tool_call("search", call_id="c1", args={"query": "demo-topic"})
+    builder.record_tool_result("c1", "search", output="found result")
     trace = builder.build()
 
 Fluent chaining is supported::
@@ -12,7 +12,7 @@ Fluent chaining is supported::
     trace = (
         TraceBuilder(run_id="run-123")
         .record_routing("supervisor", "researcher")
-        .record_tool_call("search", call_id="c1", args={"q": "acme"})
+        .record_tool_call("search", call_id="c1", args={"query": "demo-topic"})
         .build()
     )
 """
