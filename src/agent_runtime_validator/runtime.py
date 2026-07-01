@@ -25,6 +25,20 @@ OnValidatorBudgetExhausted = Literal[
 
 _VALID_ON_EXHAUSTED = frozenset(get_args(OnValidatorBudgetExhausted))
 
+ValidatorMode = Literal["checkpoint", "final_gate"]
+"""Controls when the validator is invoked.
+
+``"checkpoint"`` (default): validator only runs when at least one trigger fires.
+Use this for inline mid-run monitoring — the common "all-clear" path never calls
+the validator.
+
+``"final_gate"``: validator always runs, regardless of trigger results.
+Use this when the validator is a post-run quality check that should inspect
+every completed trace, even clean ones.
+"""
+
+_VALID_VALIDATOR_MODES = frozenset(get_args(ValidatorMode))
+
 
 class RuntimeValidator:
     def __init__(
@@ -34,6 +48,7 @@ class RuntimeValidator:
         policy: BasePolicy | None = None,
         max_validator_calls_per_run: int | None = None,
         on_validator_budget_exhausted: OnValidatorBudgetExhausted = "skip",
+        validator_mode: ValidatorMode = "checkpoint",
     ) -> None:
         if max_validator_calls_per_run is not None and max_validator_calls_per_run < 0:
             raise ValueError("max_validator_calls_per_run must be >= 0")
@@ -42,11 +57,16 @@ class RuntimeValidator:
                 "on_validator_budget_exhausted must be one of "
                 f"{sorted(_VALID_ON_EXHAUSTED)}"
             )
+        if validator_mode not in _VALID_VALIDATOR_MODES:
+            raise ValueError(
+                f"validator_mode must be one of {sorted(_VALID_VALIDATOR_MODES)}"
+            )
         self.triggers = triggers
         self.validator = validator or NoOpValidator()
         self.policy = policy or DefaultPolicy()
         self.max_validator_calls_per_run = max_validator_calls_per_run
         self.on_validator_budget_exhausted: OnValidatorBudgetExhausted = on_validator_budget_exhausted
+        self.validator_mode: ValidatorMode = validator_mode
 
     def _evaluate_triggers(self, trace: ExecutionTrace):
         logger.debug("run=%s evaluating %d trigger(s)", trace.run_id, len(self.triggers))
@@ -97,11 +117,18 @@ class RuntimeValidator:
             issues=["Validator budget exhausted"],
         )
 
+    def _should_invoke_validator(self, fired: list) -> bool:
+        if isinstance(self.validator, NoOpValidator):
+            return False
+        if self.validator_mode == "final_gate":
+            return True
+        return bool(fired)
+
     def validate(self, trace: ExecutionTrace) -> ValidationDecision:
         trigger_results, fired = self._evaluate_triggers(trace)
 
         validator_result: ValidatorResult | None = None
-        if fired and not isinstance(self.validator, NoOpValidator):
+        if self._should_invoke_validator(fired):
             if not self._budget_remaining(trace):
                 logger.info(
                     "run=%s validator budget exhausted (max=%s on_exhausted=%s), skipping validator",
@@ -134,7 +161,7 @@ class RuntimeValidator:
         trigger_results, fired = self._evaluate_triggers(trace)
 
         validator_result: ValidatorResult | None = None
-        if fired and not isinstance(self.validator, NoOpValidator):
+        if self._should_invoke_validator(fired):
             if not self._budget_remaining(trace):
                 logger.info(
                     "run=%s validator budget exhausted (max=%s on_exhausted=%s), skipping validator",

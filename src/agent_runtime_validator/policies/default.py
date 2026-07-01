@@ -73,6 +73,18 @@ class DefaultPolicy(BasePolicy):
         triggered_by = [t.trigger_name for t in fired]
 
         if not fired:
+            # When the validator runs without trigger signal (final_gate mode),
+            # honor escalations — a validator recommending stop should not be
+            # silently ignored just because triggers were quiet.
+            if validator_result is not None and validator_result.recommendation != "continue":
+                return ValidationDecision(
+                    should_continue=False,
+                    action=validator_result.recommendation,
+                    severity="low",
+                    reason=validator_result.reason,
+                    triggered_by=[],
+                    validator_result=validator_result,
+                )
             return ValidationDecision(
                 should_continue=True,
                 action="continue",

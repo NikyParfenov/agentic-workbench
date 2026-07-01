@@ -1,4 +1,4 @@
-from .runtime import RuntimeValidator
+from .runtime import RuntimeValidator, ValidatorMode
 from .schema.trace import ExecutionTrace
 from .schema.decisions import TriggerResult, JudgeFinding, ValidatorResult, ValidationDecision
 from .triggers.base import BaseTrigger
@@ -10,6 +10,7 @@ __version__ = "0.1.0a1"
 
 __all__ = [
     "RuntimeValidator",
+    "ValidatorMode",
     "ExecutionTrace",
     "TraceBuilder",
     "TriggerResult",
