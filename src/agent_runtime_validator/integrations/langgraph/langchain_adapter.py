@@ -12,6 +12,7 @@ from typing import Any, Literal, Sequence, cast
 
 from ...schema.events import MessageEvent, ToolCall, ToolResult
 from ...schema.trace import ExecutionTrace
+from ...trace_builder import TraceBuilder
 
 _MessageRole = Literal["user", "assistant", "system", "tool"]
 
@@ -90,6 +91,28 @@ def _get_attr_or_key(obj: Any, attr: str, default: Any = None) -> Any:
 # Public API
 # ---------------------------------------------------------------------------
 
+def _extract_subgraph_thoughts(
+    message: Any, key: str
+) -> list[str] | None:
+    """Look up *key* in the message's metadata dicts; return the value if it is
+    a list or tuple of strings, otherwise ``None``.
+
+    Checked in order: ``additional_kwargs``, ``response_metadata``, ``metadata``.
+    """
+    for attr in ("additional_kwargs", "response_metadata", "metadata"):
+        container = getattr(message, attr, None)
+        if not isinstance(container, dict):
+            continue
+        value = container.get(key)
+        if value is None:
+            continue
+        if isinstance(value, (list, tuple)) and all(isinstance(s, str) for s in value):
+            return list(value)
+        # Non-list/non-tuple or non-string-sequence — ignore silently.
+        return None
+    return None
+
+
 def from_langchain_messages(
     messages: Sequence[Any],
     *,
@@ -98,6 +121,8 @@ def from_langchain_messages(
     agent_name: str | None = None,
     artifacts: Sequence[Any] | None = None,
     metadata: dict[str, Any] | None = None,
+    include_subgraph_thoughts: bool = True,
+    subgraph_thoughts_key: str = "_subgraph_thoughts",
 ) -> ExecutionTrace:
     """Convert a LangChain message list into an :class:`ExecutionTrace`.
 
@@ -121,6 +146,14 @@ def from_langchain_messages(
         Extra metadata to merge into the trace. The key ``"_source"`` is
         always set to ``"langchain_messages"`` (caller-supplied values for
         ``"_source"`` are overwritten).
+    include_subgraph_thoughts:
+        When ``True`` (default), each message's ``additional_kwargs``,
+        ``response_metadata``, and ``metadata`` dicts are inspected for a key
+        named *subgraph_thoughts_key*. If the value is a list of strings it is
+        parsed via :func:`from_subgraph_thoughts` and merged into the trace.
+    subgraph_thoughts_key:
+        The metadata key to look for subgraph thought lines. Defaults to
+        ``"_subgraph_thoughts"``.
 
     Returns
     -------
@@ -185,7 +218,7 @@ def from_langchain_messages(
     merged_metadata: dict[str, Any] = dict(metadata) if metadata else {}
     merged_metadata["_source"] = "langchain_messages"
 
-    return ExecutionTrace(
+    base_trace = ExecutionTrace(
         run_id=run_id,
         started_at=ts,
         messages=trace_messages,
@@ -194,3 +227,27 @@ def from_langchain_messages(
         artifacts=list(artifacts) if artifacts else [],
         metadata=merged_metadata,
     )
+
+    if not include_subgraph_thoughts:
+        return base_trace
+
+    # Lift subgraph thoughts from each message's metadata dicts.
+    from .subgraph_adapter import from_subgraph_thoughts  # local import: avoid circular imports
+
+    builder = TraceBuilder.from_trace(base_trace)
+    for msg in messages:
+        thoughts = _extract_subgraph_thoughts(msg, subgraph_thoughts_key)
+        if thoughts is None:
+            continue
+        try:
+            subgraph_trace = from_subgraph_thoughts(
+                thoughts,
+                run_id=f"{run_id}-subgraph",
+                started_at=started_at,
+                agent_name=agent_name,
+            )
+        except Exception:
+            continue
+        builder.merge_trace(subgraph_trace)
+
+    return builder.build()

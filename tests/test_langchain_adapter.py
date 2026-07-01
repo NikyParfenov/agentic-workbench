@@ -307,3 +307,140 @@ def test_list_content_ai_message_joined():
     trace = from_langchain_messages([FakeAIMessageListContent()])
     assert "Here is what I found:" in trace.messages[0].content
     assert "Result A" in trace.messages[0].content
+
+
+# ---------------------------------------------------------------------------
+# 11. Subgraph thoughts lifted from message metadata
+# ---------------------------------------------------------------------------
+
+class FakeAIMessageWithThoughts:
+    type = "ai"
+    content = "Working..."
+    tool_calls = []
+    additional_kwargs = {
+        "_subgraph_thoughts": [
+            'Tool call [c1] analyze_item with arguments: {"item_id": "demo-item"}',
+            'Tool result [c1]: {"status": "ok"}',
+        ]
+    }
+
+
+class FakeAIMessageWithThoughtsInResponseMetadata:
+    """Thoughts stored in response_metadata, not additional_kwargs."""
+    type = "ai"
+    content = "Working..."
+    tool_calls = []
+    additional_kwargs: dict = {}
+    response_metadata = {
+        "_subgraph_thoughts": [
+            'Tool call [r1] fetch_data with arguments: {"id": "x"}',
+            'Tool result [r1]: done',
+        ]
+    }
+
+
+class FakeAIMessageWithWorkerLog:
+    """Thoughts stored under a custom key."""
+    type = "ai"
+    content = "Processing..."
+    tool_calls = []
+    additional_kwargs = {
+        "worker_log": [
+            'Tool call [w1] process_item with arguments: {"item": "y"}',
+            'Tool result [w1]: processed',
+        ]
+    }
+
+
+class FakeAIMessageThoughtsNotList:
+    """Subgraph thoughts key holds a non-list value — should be ignored."""
+    type = "ai"
+    content = "Just thinking..."
+    tool_calls = []
+    additional_kwargs = {"_subgraph_thoughts": "some string, not a list"}
+
+
+class FakeAIMessageMalformedThought:
+    """One thought line is malformed; adapter should not raise."""
+    type = "ai"
+    content = "Whatever"
+    tool_calls = []
+    additional_kwargs = {
+        "_subgraph_thoughts": [
+            "this is not a recognized pattern at all",
+            'Tool call [m1] do_thing with arguments: {"k": "v"}',
+            'Tool result [m1]: ok',
+        ]
+    }
+
+
+def test_subgraph_thoughts_produce_tool_call_and_result():
+    """Metadata _subgraph_thoughts produces ToolCall and ToolResult in returned trace."""
+    trace = from_langchain_messages([FakeAIMessageWithThoughts()])
+    assert len(trace.tool_calls) == 1
+    assert trace.tool_calls[0].tool_name == "analyze_item"
+    assert trace.tool_calls[0].call_id == "c1"
+    assert len(trace.tool_results) == 1
+    assert trace.tool_results[0].call_id == "c1"
+
+
+def test_include_subgraph_thoughts_false_ignores_metadata():
+    """include_subgraph_thoughts=False skips metadata inspection entirely."""
+    trace = from_langchain_messages(
+        [FakeAIMessageWithThoughts()],
+        include_subgraph_thoughts=False,
+    )
+    assert len(trace.tool_calls) == 0
+    assert len(trace.tool_results) == 0
+
+
+def test_custom_subgraph_thoughts_key():
+    """Custom subgraph_thoughts_key is respected."""
+    trace = from_langchain_messages(
+        [FakeAIMessageWithWorkerLog()],
+        subgraph_thoughts_key="worker_log",
+    )
+    assert len(trace.tool_calls) == 1
+    assert trace.tool_calls[0].tool_name == "process_item"
+    assert len(trace.tool_results) == 1
+
+
+def test_non_list_value_for_thoughts_key_ignored():
+    """Non-list value for the thoughts key is ignored safely."""
+    trace = from_langchain_messages([FakeAIMessageThoughtsNotList()])
+    assert len(trace.tool_calls) == 0
+    assert len(trace.tool_results) == 0
+
+
+def test_malformed_thought_line_does_not_raise():
+    """A malformed thought line does not raise; valid lines are still parsed."""
+    trace = from_langchain_messages([FakeAIMessageMalformedThought()])
+    # The malformed line does not raise; recognized lines produce events.
+    assert len(trace.tool_calls) == 1
+    assert len(trace.tool_results) == 1
+
+
+def test_no_routing_or_agent_calls_inferred_from_thoughts():
+    """No routing_events or agent_calls are inferred from subgraph thoughts."""
+    trace = from_langchain_messages([FakeAIMessageWithThoughts()])
+    assert trace.routing_events == []
+    assert trace.agent_calls == []
+
+
+def test_existing_message_mapping_still_works_with_subgraph_thoughts():
+    """Top-level messages are still present when subgraph thoughts are lifted."""
+    trace = from_langchain_messages([FakeHumanMessage(), FakeAIMessageWithThoughts()])
+    # Human message + AI message from top-level + thought messages from subgraph
+    top_level_roles = [m.role for m in trace.messages[:2]]
+    assert "user" in top_level_roles
+    assert "assistant" in top_level_roles
+    # Tool call from subgraph metadata is merged in
+    assert any(tc.tool_name == "analyze_item" for tc in trace.tool_calls)
+
+
+def test_response_metadata_key_also_checked():
+    """response_metadata is checked when additional_kwargs is absent or empty."""
+    trace = from_langchain_messages([FakeAIMessageWithThoughtsInResponseMetadata()])
+    assert len(trace.tool_calls) == 1
+    assert trace.tool_calls[0].tool_name == "fetch_data"
+    assert len(trace.tool_results) == 1

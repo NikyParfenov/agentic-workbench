@@ -349,11 +349,25 @@ def build_trace(state: dict) -> ExecutionTrace:
     return from_langchain_messages(
         state["messages"],
         run_id=state.get("run_id", "run"),
-        agent_name="research_agent",
+        agent_name="analyst",
+        include_subgraph_thoughts=True,   # default: lift _subgraph_thoughts from message metadata
     )
 
 node = ValidationNode(triggers=[...], trace_builder=build_trace)
 ```
+
+When `include_subgraph_thoughts=True` (the default), the adapter inspects each
+message's `additional_kwargs`, `response_metadata`, and `metadata` dicts for a
+key named `_subgraph_thoughts`. If the value is a list of strings it is parsed
+via `from_subgraph_thoughts` and the resulting tool calls and results are merged
+into the main trace.
+
+- Default key is `_subgraph_thoughts`; pass `subgraph_thoughts_key=` to use a
+  different key.
+- The parser is best-effort (via `from_subgraph_thoughts`) — unrecognised lines
+  produce a message only, never an error.
+- Routing events and semantic agent calls are never inferred from thought text;
+  those must be recorded explicitly.
 
 ### Limitations
 
