@@ -29,6 +29,9 @@ Import them from `agent_runtime_validator.triggers`.
 | `SameToolSameArgsLoopTrigger` | Same tool + identical args ≥ N times | `high` | `max_repeats` |
 | `ToolErrorRateTrigger` | Error rate ≥ threshold | `high` | `max_error_rate`, `min_results` (1) |
 | `NoToolUsageTrigger` | A watched agent made fewer calls than expected | `medium` | `watched_agents`, `min_expected_calls` (1) |
+| `MaxAgentCallsTrigger` | Total agent-to-agent delegations ≥ limit | `high` | `max_calls` |
+| `AgentDelegationLoopTrigger` | Same supervisor→subagent pair repeated ≥ N times | `high` | `max_repeats` |
+| `SubagentNoOutputTrigger` | ≥ N agent calls completed with no output | `medium` | `min_stalled` (1) |
 
 Every trigger also accepts `severity=` to override its default.
 
@@ -78,6 +81,48 @@ agents that legitimately never call tools should **not** be in `watched_agents`.
 from agent_runtime_validator.triggers import NoToolUsageTrigger
 
 NoToolUsageTrigger(watched_agents={"researcher", "coder"}, min_expected_calls=1)
+```
+
+### Supervisor / subgraph triggers
+
+These three triggers work on `AgentCall` events — records of one agent invoking
+another. They are most useful in supervisor/multi-agent graphs where a parent
+node delegates to subgraphs.
+
+**`MaxAgentCallsTrigger`** — fires when the total number of agent delegations
+reaches `max_calls`. Analogous to `MaxToolCallsTrigger` but for
+agent-to-agent calls.
+
+```python
+MaxAgentCallsTrigger(max_calls=20)
+```
+
+**`AgentDelegationLoopTrigger`** — fires when the same `(caller, callee)` pair
+appears `max_repeats` or more times. Catches a supervisor that keeps
+re-dispatching to the same subagent without progress.
+
+```python
+AgentDelegationLoopTrigger(max_repeats=3)
+```
+
+**`SubagentNoOutputTrigger`** — fires when `min_stalled` or more `AgentCall`
+entries have `output=None`. An agent call with no output means the callee was
+invoked but never returned a result — a common symptom of subgraph deadlocks or
+unhandled exceptions inside a subgraph.
+
+```python
+SubagentNoOutputTrigger(min_stalled=1)  # fire on any stalled subagent
+```
+
+These triggers populate `trace.agent_calls`. Add an `AgentCall` event each time
+your supervisor dispatches to a subagent and record the `output` when the
+subagent returns:
+
+```python
+from agent_runtime_validator import TraceBuilder
+
+builder = TraceBuilder(run_id=run_id)
+builder.record_agent_call("supervisor", "researcher", input=task, output=result)
 ```
 
 ## Choosing severities

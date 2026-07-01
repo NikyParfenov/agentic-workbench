@@ -1,6 +1,6 @@
 from datetime import datetime, timezone, timedelta
 from agent_runtime_validator.schema.events import (
-    ToolCall, ToolResult, RoutingEvent, ArtifactEvent, ErrorEvent,
+    AgentCall, ToolCall, ToolResult, RoutingEvent, ArtifactEvent, ErrorEvent,
 )
 from agent_runtime_validator.schema.trace import ExecutionTrace
 
@@ -65,6 +65,21 @@ def make_artifact(
         artifact_type=artifact_type,
         content="result content",
         timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc) + timedelta(days=ts_offset_days),
+    )
+
+
+def make_agent_call(
+    caller: str = "supervisor",
+    callee: str = "researcher",
+    input: str = "do this",
+    output: str | None = "done",
+) -> AgentCall:
+    return AgentCall(
+        caller=caller,
+        callee=callee,
+        input=input,
+        output=output,
+        timestamp=datetime(2024, 1, 1, tzinfo=timezone.utc),
     )
 
 

@@ -9,6 +9,9 @@ from .agent_pingpong import AgentPingPongTrigger
 from .no_progress import NoProgressTrigger
 from .tool_error_rate import ToolErrorRateTrigger
 from .no_tool_usage import NoToolUsageTrigger
+from .max_agent_calls import MaxAgentCallsTrigger
+from .agent_delegation_loop import AgentDelegationLoopTrigger
+from .subagent_no_output import SubagentNoOutputTrigger
 
 __all__ = [
     "BaseTrigger",
@@ -22,4 +25,7 @@ __all__ = [
     "NoProgressTrigger",
     "ToolErrorRateTrigger",
     "NoToolUsageTrigger",
+    "MaxAgentCallsTrigger",
+    "AgentDelegationLoopTrigger",
+    "SubagentNoOutputTrigger",
 ]

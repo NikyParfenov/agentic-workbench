@@ -3,7 +3,7 @@ import os
 sys.path.insert(0, os.path.dirname(__file__))
 
 from datetime import datetime, timezone, timedelta
-from conftest import make_trace, make_tool_call, make_routing_event, make_tool_result
+from conftest import make_trace, make_tool_call, make_routing_event, make_tool_result, make_agent_call
 from agent_runtime_validator.triggers.max_calls import MaxToolCallsTrigger
 from agent_runtime_validator.triggers.max_routes import MaxRoutesTrigger
 from agent_runtime_validator.triggers.max_context_tokens import MaxContextTokensTrigger
@@ -437,6 +437,172 @@ def test_triggers_package_exports():
         MaxContextTokensTrigger, MaxExecutionTimeTrigger,
         SameToolLoopTrigger, SameToolSameArgsLoopTrigger,
         AgentPingPongTrigger, NoProgressTrigger, ToolErrorRateTrigger,
+        MaxAgentCallsTrigger, AgentDelegationLoopTrigger, SubagentNoOutputTrigger,
     )
     assert issubclass(MaxToolCallsTrigger, BaseTrigger)
     assert issubclass(ToolErrorRateTrigger, BaseTrigger)
+    assert issubclass(MaxAgentCallsTrigger, BaseTrigger)
+    assert issubclass(AgentDelegationLoopTrigger, BaseTrigger)
+    assert issubclass(SubagentNoOutputTrigger, BaseTrigger)
+
+
+# ---------------------------------------------------------------------------
+# MaxAgentCallsTrigger
+# ---------------------------------------------------------------------------
+
+from agent_runtime_validator.triggers.max_agent_calls import MaxAgentCallsTrigger
+
+def test_max_agent_calls_not_triggered_below_limit():
+    calls = [make_agent_call("sup", "researcher"), make_agent_call("sup", "writer")]
+    trace = make_trace(agent_calls=calls)
+    result = MaxAgentCallsTrigger(max_calls=3).evaluate(trace)
+    assert result.triggered is False
+    assert result.trigger_name == "MaxAgentCallsTrigger"
+
+
+def test_max_agent_calls_triggered_at_limit():
+    calls = [make_agent_call("sup", f"agent{i}") for i in range(3)]
+    trace = make_trace(agent_calls=calls)
+    result = MaxAgentCallsTrigger(max_calls=3).evaluate(trace)
+    assert result.triggered is True
+    assert result.severity == "high"
+
+
+def test_max_agent_calls_triggered_above_limit():
+    calls = [make_agent_call("sup", "researcher") for _ in range(5)]
+    trace = make_trace(agent_calls=calls)
+    result = MaxAgentCallsTrigger(max_calls=3).evaluate(trace)
+    assert result.triggered is True
+
+
+def test_max_agent_calls_empty_trace():
+    result = MaxAgentCallsTrigger(max_calls=1).evaluate(make_trace())
+    assert result.triggered is False
+
+
+def test_max_agent_calls_evidence():
+    calls = [make_agent_call("sup", "r") for _ in range(4)]
+    trace = make_trace(agent_calls=calls)
+    result = MaxAgentCallsTrigger(max_calls=3).evaluate(trace)
+    assert result.evidence["count"] == 4
+    assert result.evidence["max_calls"] == 3
+
+
+# ---------------------------------------------------------------------------
+# AgentDelegationLoopTrigger
+# ---------------------------------------------------------------------------
+
+from agent_runtime_validator.triggers.agent_delegation_loop import AgentDelegationLoopTrigger
+
+def test_delegation_loop_not_triggered_below_limit():
+    calls = [make_agent_call("sup", "researcher") for _ in range(2)]
+    trace = make_trace(agent_calls=calls)
+    result = AgentDelegationLoopTrigger(max_repeats=3).evaluate(trace)
+    assert result.triggered is False
+    assert result.trigger_name == "AgentDelegationLoopTrigger"
+
+
+def test_delegation_loop_triggered_at_limit():
+    calls = [make_agent_call("sup", "researcher") for _ in range(3)]
+    trace = make_trace(agent_calls=calls)
+    result = AgentDelegationLoopTrigger(max_repeats=3).evaluate(trace)
+    assert result.triggered is True
+    assert result.severity == "high"
+
+
+def test_delegation_loop_only_counts_same_pair():
+    calls = [
+        make_agent_call("sup", "researcher"),
+        make_agent_call("sup", "researcher"),
+        make_agent_call("sup", "writer"),
+        make_agent_call("sup", "writer"),
+        make_agent_call("sup", "writer"),
+    ]
+    trace = make_trace(agent_calls=calls)
+    # writer repeated 3x → should fire at max_repeats=3
+    result = AgentDelegationLoopTrigger(max_repeats=3).evaluate(trace)
+    assert result.triggered is True
+    assert result.evidence["top_callee"] == "writer"
+    assert result.evidence["top_count"] == 3
+
+
+def test_delegation_loop_different_pairs_no_trigger():
+    calls = [
+        make_agent_call("sup", "a"),
+        make_agent_call("sup", "b"),
+        make_agent_call("sup", "c"),
+    ]
+    trace = make_trace(agent_calls=calls)
+    result = AgentDelegationLoopTrigger(max_repeats=3).evaluate(trace)
+    assert result.triggered is False
+
+
+def test_delegation_loop_empty_trace():
+    result = AgentDelegationLoopTrigger(max_repeats=2).evaluate(make_trace())
+    assert result.triggered is False
+
+
+def test_delegation_loop_evidence():
+    calls = [make_agent_call("sup", "researcher") for _ in range(4)]
+    trace = make_trace(agent_calls=calls)
+    result = AgentDelegationLoopTrigger(max_repeats=3).evaluate(trace)
+    assert result.evidence["top_caller"] == "sup"
+    assert result.evidence["top_callee"] == "researcher"
+    assert result.evidence["top_count"] == 4
+
+
+# ---------------------------------------------------------------------------
+# SubagentNoOutputTrigger
+# ---------------------------------------------------------------------------
+
+from agent_runtime_validator.triggers.subagent_no_output import SubagentNoOutputTrigger
+
+def test_subagent_no_output_not_triggered_all_have_output():
+    calls = [
+        make_agent_call("sup", "researcher", output="report"),
+        make_agent_call("sup", "writer", output="draft"),
+    ]
+    trace = make_trace(agent_calls=calls)
+    result = SubagentNoOutputTrigger(min_stalled=1).evaluate(trace)
+    assert result.triggered is False
+    assert result.trigger_name == "SubagentNoOutputTrigger"
+
+
+def test_subagent_no_output_triggered_when_stalled():
+    calls = [
+        make_agent_call("sup", "researcher", output=None),
+        make_agent_call("sup", "writer", output="draft"),
+    ]
+    trace = make_trace(agent_calls=calls)
+    result = SubagentNoOutputTrigger(min_stalled=1).evaluate(trace)
+    assert result.triggered is True
+    assert result.severity == "medium"
+
+
+def test_subagent_no_output_threshold():
+    calls = [
+        make_agent_call("sup", "a", output=None),
+        make_agent_call("sup", "b", output=None),
+        make_agent_call("sup", "c", output="ok"),
+    ]
+    trace = make_trace(agent_calls=calls)
+    # 2 stalled, threshold=2 → fires
+    assert SubagentNoOutputTrigger(min_stalled=2).evaluate(trace).triggered is True
+    # threshold=3 → doesn't fire
+    assert SubagentNoOutputTrigger(min_stalled=3).evaluate(trace).triggered is False
+
+
+def test_subagent_no_output_empty_trace():
+    result = SubagentNoOutputTrigger(min_stalled=1).evaluate(make_trace())
+    assert result.triggered is False
+
+
+def test_subagent_no_output_evidence():
+    calls = [
+        make_agent_call("sup", "researcher", output=None),
+        make_agent_call("sup", "researcher", output=None),
+    ]
+    trace = make_trace(agent_calls=calls)
+    result = SubagentNoOutputTrigger(min_stalled=1).evaluate(trace)
+    assert result.evidence["stalled_count"] == 2
+    assert "researcher" in result.evidence["stalled_callees"]
