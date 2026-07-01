@@ -192,9 +192,108 @@ builder.add_conditional_edges("validation", route)
 
 ## Async graphs
 
-For async graphs, call `node.async_call(state)`; it runs the same logic through
-`validate_async`, awaiting async validators. Use it when your validator calls an
-async model — see [Validators](validators.md#sync-vs-async).
+For async LangGraph graphs, register `node.async_call` instead of `node` as the
+graph node. `async_call` has the same signature as `__call__` but awaits the
+validator and uses `validate_async` internally.
+
+```python
+from agent_runtime_validator.integrations.langgraph import ValidationNode
+from agent_runtime_validator.validators import LLMJudgeValidator
+
+async def call_model_async(prompt: str) -> str:
+    return await my_llm_client.generate(prompt)
+
+node = ValidationNode(
+    triggers=[...],
+    validator=LLMJudgeValidator(model=call_model_async),
+)
+
+# Register the async entry point — NOT node itself
+builder.add_node("validation", node.async_call)
+builder.add_conditional_edges("validation", create_validation_router(...))
+```
+
+`node.__call__` is the sync entry point; `node.async_call` is the async one.
+They share all state (triggers, validator, budget) — only the execution path
+differs. Do **not** mix them on the same `ValidationNode` within the same graph.
+
+If your validator is sync (e.g. `TriggerScoreValidator`, `JsonSchemaValidator`),
+you can still register `node.async_call` — it will work correctly, calling the
+sync validator inside an async context.
+
+Calling sync `validate()` with an async model raises `RuntimeError` with a clear
+message pointing to `validate_async`. The async registration sidesteps this
+entirely.
+
+## Trace persistence and archiving
+
+`ValidationNode` writes the resolved `ExecutionTrace` back into state on every
+call (`{**state, trace_key: trace, decision_key: decision}`). This is important
+for two reasons:
+
+1. **Budget continuity** — `trace.metadata["_runtime_validator_call_count"]`
+   persists across node invocations. Without writing the trace back, the budget
+   counter resets on every call when the trace was passed as a serialized dict.
+
+2. **Archiving** — the trace in state at the end of a run contains the full
+   history of events. Saving it gives you an offline record for debugging and
+   replay.
+
+### Extracting the trace at end of run
+
+Use `get_trace_from_state` to read the trace regardless of how LangGraph stored
+it (in-memory `ExecutionTrace`, serialized `dict`, or absent):
+
+```python
+from agent_runtime_validator.integrations.langgraph import get_trace_from_state
+from agent_runtime_validator import save_trace
+
+def archive_trace(state: dict) -> dict:
+    trace = get_trace_from_state(state)   # trace_key defaults to "trace"
+    if trace is not None:
+        save_trace(trace, f"traces/{trace.run_id}.json")
+    return state
+
+builder.add_node("archive", archive_trace)
+builder.add_edge("validation", "archive")
+builder.add_edge("archive", END)
+```
+
+`get_trace_from_state(state, trace_key="trace")` handles all three storage forms:
+- `ExecutionTrace` object (before checkpointing)
+- `dict` (after LangGraph deserializes a checkpoint)
+- absent key → returns `None`
+
+### Offline replay
+
+Once archived, replay the trace against an updated validator config without
+re-running the graph:
+
+```python
+from agent_runtime_validator import load_trace, replay, RuntimeValidator
+from agent_runtime_validator.triggers import SameToolLoopTrigger
+
+tuned_validator = RuntimeValidator(
+    triggers=[SameToolLoopTrigger(max_repeats=2)],  # tightened threshold
+)
+trace = load_trace("traces/run-abc123.json")
+decision = replay(trace, tuned_validator)
+print(decision.action, decision.triggered_by)
+```
+
+See [Quickstart — Saving and replaying traces](quickstart.md#saving-and-replaying-traces)
+for the full offline replay API.
+
+### Budget state across checkpoints
+
+LangGraph checkpointers (e.g. `MemorySaver`, `SqliteSaver`) serialize state to
+JSON between steps. After deserialization the `ExecutionTrace` arrives as a
+plain `dict`. `ValidationNode` detects this and re-parses it before validating,
+so `trace.metadata["_runtime_validator_call_count"]` is never lost.
+
+If you build a custom `trace_builder`, make sure your builder preserves
+`state[trace_key]["metadata"]` (if the key already holds a serialized trace)
+so the budget counter survives checkpoints.
 
 ## Related
 

@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from typing import Any
 
 try:
     from langgraph.graph import StateGraph  # noqa: F401
@@ -11,7 +12,7 @@ except ImportError:
 from ...schema.trace import ExecutionTrace
 
 
-def state_to_trace(state: dict, run_id: str | None = None) -> ExecutionTrace:
+def state_to_trace(state: dict[str, Any], run_id: str | None = None) -> ExecutionTrace:
     return ExecutionTrace(
         run_id=run_id or state.get("run_id", "langgraph-run"),
         started_at=state.get("started_at", datetime.now(timezone.utc)),
@@ -25,3 +26,33 @@ def state_to_trace(state: dict, run_id: str | None = None) -> ExecutionTrace:
         metadata=state.get("_trace_metadata", {}),
         token_usage=state.get("_trace_token_usage"),
     )
+
+
+def get_trace_from_state(
+    state: dict[str, Any], trace_key: str = "trace"
+) -> ExecutionTrace | None:
+    """Extract an ``ExecutionTrace`` from LangGraph state, handling all storage forms.
+
+    Returns ``None`` when *trace_key* is not present in *state*.
+    Handles three forms that appear in practice:
+
+    - ``ExecutionTrace`` object (in-memory, before checkpointing)
+    - ``dict`` (after LangGraph deserializes a checkpointed state)
+    - absent key (graph never ran through a ``ValidationNode``)
+
+    Useful at the end of a graph run to retrieve the trace for archiving::
+
+        def save_run_trace(state: dict) -> dict:
+            trace = get_trace_from_state(state)
+            if trace is not None:
+                save_trace(trace, f"traces/{trace.run_id}.json")
+            return state
+    """
+    raw = state.get(trace_key)
+    if raw is None:
+        return None
+    if isinstance(raw, ExecutionTrace):
+        return raw
+    if isinstance(raw, dict):
+        return ExecutionTrace(**raw)
+    return None

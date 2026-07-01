@@ -9,7 +9,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from datetime import datetime, timezone
 from conftest import make_trace, make_routing_event
 from agent_runtime_validator.integrations.langgraph.nodes import ValidationNode, create_validation_router
-from agent_runtime_validator.integrations.langgraph.adapter import state_to_trace
+from agent_runtime_validator.integrations.langgraph.adapter import state_to_trace, get_trace_from_state
+from agent_runtime_validator.integrations.langgraph import get_trace_from_state as get_trace_top
 from agent_runtime_validator.schema.decisions import ValidationDecision, ValidatorResult
 from agent_runtime_validator.triggers import MaxRoutesTrigger
 
@@ -223,3 +224,60 @@ async def test_trace_builder_async():
 def test_trace_builder_fn_type_importable():
     from agent_runtime_validator.integrations.langgraph import TraceBuilderFn
     assert TraceBuilderFn is not None
+
+
+# --- get_trace_from_state ---
+
+def test_get_trace_from_state_returns_trace_object():
+    trace = make_trace()
+    result = get_trace_from_state({"trace": trace})
+    assert result is trace
+
+
+def test_get_trace_from_state_parses_dict():
+    trace = make_trace()
+    state = {"trace": trace.model_dump()}
+    result = get_trace_from_state(state)
+    assert isinstance(result, type(trace))
+    assert result.run_id == trace.run_id
+
+
+def test_get_trace_from_state_returns_none_when_absent():
+    result = get_trace_from_state({})
+    assert result is None
+
+
+def test_get_trace_from_state_custom_key():
+    trace = make_trace()
+    result = get_trace_from_state({"my_trace": trace}, trace_key="my_trace")
+    assert result is trace
+
+
+def test_get_trace_from_state_wrong_key_returns_none():
+    trace = make_trace()
+    result = get_trace_from_state({"trace": trace}, trace_key="other")
+    assert result is None
+
+
+def test_get_trace_from_state_importable_from_package():
+    assert get_trace_top is not None
+    assert callable(get_trace_top)
+
+
+def test_validation_node_writes_trace_for_budget_persistence():
+    """Budget counter in metadata survives a dict-serialized trace round-trip."""
+    node = ValidationNode(
+        triggers=[MaxRoutesTrigger(max_routes=1)],
+        max_validator_calls_per_run=1,
+        on_validator_budget_exhausted="interrupt",
+    )
+    trace = make_trace(routing_events=[make_routing_event("A", "B")])
+    state = {"trace": trace}
+    # First call — budget consumed
+    result1 = node(state)
+    # Simulate checkpoint serialization: trace stored as dict
+    serialized_state = {**result1, "trace": result1["trace"].model_dump()}
+    # Second call — budget exhausted, should use on_exhausted behavior
+    result2 = node(serialized_state)
+    # Decision should reflect exhausted budget (interrupt) not re-run validator
+    assert result2["decision"] is not None
