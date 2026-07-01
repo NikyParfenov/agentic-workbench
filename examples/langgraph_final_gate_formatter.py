@@ -1,12 +1,10 @@
-"""Final-gate validation before a Formatter node — LangGraph example.
+"""Final-gate validation before a ResponseBuilder node — LangGraph example.
 
 Graph shape:
-    supervisor / research_agent
-           ↓
-    ValidationNode(validator_mode="final_gate")
-           ├── continue  → formatter → END
-           ├── reroute   → supervisor
-           └── interrupt / abort → END
+    Planner → Analyst → ValidationNode(validator_mode="final_gate")
+                            ├── continue  → ResponseBuilder → END
+                            ├── reroute   → Planner
+                            └── interrupt / abort → Stop
 
 No real LLM calls are made. The stub validator always returns valid=True so
 the graph walks the happy path on a normal run. Set FORCE_REROUTE=True at the
@@ -76,7 +74,7 @@ class _StubValidator(BaseValidator):
 class AgentState(TypedDict):
     trace: ExecutionTrace
     decision: ValidationDecision | None
-    formatted_answer: str | None
+    built_response: str | None
     cycle_count: int
 
 
@@ -84,11 +82,11 @@ class AgentState(TypedDict):
 # Nodes
 # ---------------------------------------------------------------------------
 
-def supervisor(state: AgentState) -> AgentState:
+def planner_node(state: AgentState) -> AgentState:
     cycle = state.get("cycle_count", 0)
-    print(f"[supervisor] cycle={cycle}")
+    print(f"[planner] cycle={cycle}")
     builder = TraceBuilder.from_trace(state["trace"])
-    builder.record_routing("supervisor", "research_agent", reason="dispatch")
+    builder.record_routing("planner", "analyst", reason="dispatch")
     return {
         **state,
         "trace": builder.build(),
@@ -96,56 +94,63 @@ def supervisor(state: AgentState) -> AgentState:
     }
 
 
-def research_agent(state: AgentState) -> AgentState:
-    print("[research_agent] calling lookup_record(demo-record)")
+def analyst_node(state: AgentState) -> AgentState:
+    print("[analyst] calling analyze_item(demo-item)")
     existing = state["trace"]
     call_id = f"c{len(existing.tool_calls) + 1}"
     builder = (
         TraceBuilder.from_trace(existing)
         .record_tool_call(
-            "lookup_record",
+            "analyze_item",
             call_id=call_id,
-            args={"record_id": "demo-record"},
-            agent_name="research_agent",
+            args={"item_id": "demo-item"},
+            agent_name="analyst",
         )
         .record_tool_result(
             call_id,
-            "lookup_record",
-            output='{"record_id": "demo-record", "status": "active", "value": 42}',
+            "analyze_item",
+            output='{"item_id": "demo-item", "status": "active", "value": 42}',
         )
         .record_artifact(
             artifact_id="result-1",
             artifact_type="json_record",
-            content='{"record_id": "demo-record", "status": "active", "value": 42}',
-            agent_name="research_agent",
+            content='{"item_id": "demo-item", "status": "active", "value": 42}',
+            agent_name="analyst",
         )
     )
     return {**state, "trace": builder.build()}
 
 
-def formatter(state: AgentState) -> AgentState:
-    print("[formatter] building final answer from trace artifacts")
+def response_builder_node(state: AgentState) -> AgentState:
+    print("[response_builder] assembling final response from trace artifacts")
     artifacts = state["trace"].artifacts
     if artifacts:
         summary = "; ".join(
             f"{a.artifact_id}={a.content[:60]}" for a in artifacts
         )
-        answer = f"Formatted answer: {summary}"
+        response = f"Built response: {summary}"
     else:
-        answer = "Formatted answer: (no artifacts)"
-    return {**state, "formatted_answer": answer}
+        response = "Built response: (no artifacts)"
+    return {**state, "built_response": response}
+
+
+def stop(state: AgentState) -> AgentState:
+    decision: ValidationDecision | None = state.get("decision")
+    reason = decision.action if decision else "unknown"
+    print(f"[stop] run halted — action={reason}")
+    return state
 
 
 # ---------------------------------------------------------------------------
-# Supervisor guard — prevent infinite loops in the demo
+# Planner guard — prevent infinite loops in the demo
 # ---------------------------------------------------------------------------
 
-def _supervisor_or_end(state: AgentState) -> str:
-    """After supervisor: go to research_agent unless we've hit the cycle cap."""
+def _planner_or_end(state: AgentState) -> str:
+    """After planner: go to analyst unless we've hit the cycle cap."""
     if state.get("cycle_count", 0) >= 2:
-        print("[supervisor-guard] cycle limit reached → END")
+        print("[planner-guard] cycle limit reached → END")
         return "end"
-    return "research_agent"
+    return "analyst"
 
 
 # ---------------------------------------------------------------------------
@@ -163,27 +168,29 @@ def build_graph():
     )
 
     router = create_validation_router(
-        continue_to="formatter",
-        reroute_to="supervisor",
-        interrupt_to=END,
-        abort_to=END,
+        continue_to="response_builder",
+        reroute_to="planner",
+        interrupt_to="stop",
+        abort_to="stop",
     )
 
     builder = StateGraph(AgentState)
-    builder.add_node("supervisor", supervisor)
-    builder.add_node("research_agent", research_agent)
+    builder.add_node("planner", planner_node)
+    builder.add_node("analyst", analyst_node)
     builder.add_node("validation", validation_node)  # type: ignore[arg-type]
-    builder.add_node("formatter", formatter)
+    builder.add_node("response_builder", response_builder_node)
+    builder.add_node("stop", stop)
 
-    builder.set_entry_point("supervisor")
+    builder.set_entry_point("planner")
     builder.add_conditional_edges(
-        "supervisor",
-        _supervisor_or_end,
-        {"research_agent": "research_agent", "end": END},
+        "planner",
+        _planner_or_end,
+        {"analyst": "analyst", "end": END},
     )
-    builder.add_edge("research_agent", "validation")
+    builder.add_edge("analyst", "validation")
     builder.add_conditional_edges("validation", router)
-    builder.add_edge("formatter", END)
+    builder.add_edge("response_builder", END)
+    builder.add_edge("stop", END)
 
     return builder.compile(), ts
 
@@ -198,11 +205,11 @@ def run_demo() -> None:
     initial: AgentState = {
         "trace": ExecutionTrace(run_id="final-gate-demo", started_at=ts),
         "decision": None,
-        "formatted_answer": None,
+        "built_response": None,
         "cycle_count": 0,
     }
 
-    print("=== Final-Gate Formatter Demo ===\n")
+    print("=== Final-Gate ResponseBuilder Demo ===\n")
     final = graph.invoke(initial)
 
     decision: ValidationDecision | None = final.get("decision")
@@ -210,9 +217,9 @@ def run_demo() -> None:
     if decision and decision.validator_result:
         print(f"[validation] reason={decision.validator_result.reason}")
 
-    answer = final.get("formatted_answer")
-    if answer:
-        print(f"\n{answer}")
+    response = final.get("built_response")
+    if response:
+        print(f"\n{response}")
     else:
         stop_reason = decision.action if decision else "unknown"
         print(f"\nStop reason: {stop_reason}")
