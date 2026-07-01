@@ -162,3 +162,64 @@ def test_router_dict_decision():
     router = create_validation_router(continue_to="supervisor", retry_to="researcher")
     decision_dict = _decision("retry_last_step").model_dump()
     assert router({"decision": decision_dict}) == "researcher"
+
+
+# --- trace_builder ---
+
+def test_trace_builder_called_with_state():
+    from agent_runtime_validator.integrations.langgraph import TraceBuilderFn
+    received: list[dict] = []
+
+    def builder(state: dict) -> object:
+        received.append(state)
+        return make_trace()
+
+    node = ValidationNode(triggers=[MaxRoutesTrigger(max_routes=100)], trace_builder=builder)  # type: ignore[arg-type]
+    state = {"msg": "hello"}
+    node(state)
+    assert len(received) == 1
+    assert received[0] is state
+
+
+def test_trace_builder_return_value_used():
+    custom_trace = make_trace(routing_events=[make_routing_event("A", "B")])
+
+    def builder(state: dict) -> object:
+        return custom_trace
+
+    node = ValidationNode(triggers=[MaxRoutesTrigger(max_routes=1)], trace_builder=builder)  # type: ignore[arg-type]
+    result = node({})
+    assert result["decision"].triggered_by == ["MaxRoutesTrigger"]
+
+
+def test_trace_builder_overrides_trace_key():
+    """trace_builder should take precedence over state[trace_key]."""
+    custom_trace = make_trace(routing_events=[make_routing_event("X", "Y")])
+    other_trace = make_trace()  # empty, no routing events
+
+    def builder(state: dict) -> object:
+        return custom_trace
+
+    node = ValidationNode(
+        triggers=[MaxRoutesTrigger(max_routes=1)],
+        trace_builder=builder,  # type: ignore[arg-type]
+    )
+    # state has a trace under the default key but builder should win
+    result = node({"trace": other_trace})
+    assert result["decision"].triggered_by == ["MaxRoutesTrigger"]
+
+
+async def test_trace_builder_async():
+    custom_trace = make_trace(routing_events=[make_routing_event("A", "B")])
+
+    def builder(state: dict) -> object:
+        return custom_trace
+
+    node = ValidationNode(triggers=[MaxRoutesTrigger(max_routes=1)], trace_builder=builder)  # type: ignore[arg-type]
+    result = await node.async_call({})
+    assert result["decision"].triggered_by == ["MaxRoutesTrigger"]
+
+
+def test_trace_builder_fn_type_importable():
+    from agent_runtime_validator.integrations.langgraph import TraceBuilderFn
+    assert TraceBuilderFn is not None

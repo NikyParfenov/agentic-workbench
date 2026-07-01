@@ -6,6 +6,8 @@ except ImportError:
         "Install it with: pip install agent-runtime-validator[langgraph]"
     ) from None
 
+from typing import Any, Callable
+
 from ...schema.trace import ExecutionTrace
 from ...schema.decisions import ValidationDecision
 from ...triggers.base import BaseTrigger
@@ -13,6 +15,15 @@ from ...validators.base import BaseValidator
 from ...policies.base import BasePolicy
 from ...runtime import RuntimeValidator, OnValidatorBudgetExhausted
 from .adapter import state_to_trace
+
+TraceBuilderFn = Callable[[dict[str, Any]], ExecutionTrace]
+"""Type alias for a callable that builds an ``ExecutionTrace`` from LangGraph state.
+
+Signature: ``(state: dict[str, Any]) -> ExecutionTrace``
+
+Pass an instance as ``trace_builder`` to ``ValidationNode`` to replace the
+default trace-resolution logic with your own.
+"""
 
 
 def create_validation_router(
@@ -81,6 +92,7 @@ class ValidationNode:
         decision_key: str = "decision",
         max_validator_calls_per_run: int | None = None,
         on_validator_budget_exhausted: OnValidatorBudgetExhausted = "skip",
+        trace_builder: TraceBuilderFn | None = None,
     ):
         self._runtime = RuntimeValidator(
             triggers=triggers,
@@ -91,21 +103,26 @@ class ValidationNode:
         )
         self.trace_key = trace_key
         self.decision_key = decision_key
+        self._trace_builder = trace_builder
 
-    def __call__(self, state: dict) -> dict:
-        trace = state.get(self.trace_key)
-        if trace is None:
-            trace = state_to_trace(state)
-        elif isinstance(trace, dict):
-            trace = ExecutionTrace(**trace)
+    def _resolve_trace(self, state: dict[str, Any]) -> ExecutionTrace:
+        if self._trace_builder is not None:
+            return self._trace_builder(state)
+        raw = state.get(self.trace_key)
+        if raw is None:
+            return state_to_trace(state)
+        if isinstance(raw, dict):
+            return ExecutionTrace(**raw)
+        if isinstance(raw, ExecutionTrace):
+            return raw
+        return state_to_trace(state)
+
+    def __call__(self, state: dict[str, Any]) -> dict[str, Any]:
+        trace = self._resolve_trace(state)
         decision = self._runtime.validate(trace)
         return {**state, self.trace_key: trace, self.decision_key: decision}
 
-    async def async_call(self, state: dict) -> dict:
-        trace = state.get(self.trace_key)
-        if trace is None:
-            trace = state_to_trace(state)
-        elif isinstance(trace, dict):
-            trace = ExecutionTrace(**trace)
+    async def async_call(self, state: dict[str, Any]) -> dict[str, Any]:
+        trace = self._resolve_trace(state)
         decision = await self._runtime.validate_async(trace)
         return {**state, self.trace_key: trace, self.decision_key: decision}

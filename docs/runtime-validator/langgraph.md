@@ -82,20 +82,56 @@ builder.add_edge("validation", "supervisor")
 | `decision_key` | `"decision"` | State key to write the decision to |
 | `max_validator_calls_per_run` | `None` | Max validator invocations per run; `None` = unlimited |
 | `on_validator_budget_exhausted` | `"skip"` | What to do when budget is exhausted — see [Validators](validators.md#validator-call-budget) |
+| `trace_builder` | `None` | Custom callable `(state) -> ExecutionTrace`; replaces default trace resolution |
 
 ### How the node resolves the trace
 
-When called, the node reads `state[trace_key]` and:
+When called, the node resolves the trace and then returns
+`{**state, trace_key: trace, decision_key: decision}`, leaving all other
+state fields untouched. Writing the resolved trace back into state ensures
+`trace.metadata` (including validator call budget) persists across subsequent
+node invocations, even when the trace was originally passed as a serialized dict.
 
-- if it is missing, builds one via `state_to_trace(state)`;
-- if it is a dict, parses it with `ExecutionTrace(**trace)`;
-- if it is already an `ExecutionTrace`, uses it as-is.
+**With `trace_builder=None` (default)** the node applies this three-tier lookup:
 
-It then returns `{**state, trace_key: trace, decision_key: decision}`, leaving
-other state fields untouched. Writing the resolved trace back into state
-ensures `trace.metadata` (including validator call budget) persists across
-subsequent node invocations, even when the trace was originally passed as a
-serialized dict.
+1. `state[trace_key]` is missing → build via `state_to_trace(state)`
+2. `state[trace_key]` is a `dict` → parse with `ExecutionTrace(**trace)`
+3. `state[trace_key]` is an `ExecutionTrace` → use as-is
+
+**With a custom `trace_builder`** the callable is called with `state` and its
+return value is used directly. The `trace_key` lookup is skipped entirely,
+giving you full control over how the trace is assembled.
+
+### Custom trace builder
+
+Supply `trace_builder` when the default `state_to_trace` mapping does not fit
+your state schema — for example, if your graph stores messages under a
+different key, derives tool calls from a custom structure, or needs to combine
+multiple state slices.
+
+```python
+from agent_runtime_validator.integrations.langgraph import (
+    ValidationNode,
+    TraceBuilderFn,
+)
+from agent_runtime_validator import TraceBuilder, ExecutionTrace
+
+def build_trace(state: dict) -> ExecutionTrace:
+    builder = TraceBuilder(run_id=state.get("run_id", "run"))
+    for msg in state.get("chat_history", []):
+        builder.record_message(msg["role"], msg["content"])
+    for call in state.get("tool_history", []):
+        builder.record_tool_call(call["name"], call_id=call["id"], args=call.get("args", {}))
+    return builder.build()
+
+node = ValidationNode(
+    triggers=[...],
+    trace_builder=build_trace,
+)
+```
+
+`TraceBuilderFn` is a type alias for `Callable[[dict[str, Any]], ExecutionTrace]`
+that you can use to annotate your builder function.
 
 ## Routing on the decision
 
