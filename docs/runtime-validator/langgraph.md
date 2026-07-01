@@ -82,7 +82,23 @@ builder.add_edge("validation", "supervisor")
 | `decision_key` | `"decision"` | State key to write the decision to |
 | `max_validator_calls_per_run` | `None` | Max validator invocations per run; `None` = unlimited |
 | `on_validator_budget_exhausted` | `"skip"` | What to do when budget is exhausted — see [Validators](validators.md#validator-call-budget) |
+| `validator_mode` | `"checkpoint"` | When to invoke the validator — `"checkpoint"`: only when triggers fire; `"final_gate"`: always |
 | `trace_builder` | `None` | Custom callable `(state) -> ExecutionTrace`; replaces default trace resolution |
+
+### Validator mode
+
+`validator_mode` controls when the validator is invoked:
+
+- **`"checkpoint"` (default)** — the validator runs only when at least one trigger fires. Use this for inline mid-run monitoring; the common "all-clear" path never calls the validator.
+- **`"final_gate"`** — the validator always runs, regardless of trigger results. Use this when the validator is a post-run quality check that should inspect every completed trace.
+
+```python
+node = ValidationNode(
+    triggers=[...],
+    validator=judge,
+    validator_mode="final_gate",
+)
+```
 
 ### How the node resolves the trace
 

@@ -13,7 +13,7 @@ from ...schema.decisions import ValidationDecision
 from ...triggers.base import BaseTrigger
 from ...validators.base import BaseValidator
 from ...policies.base import BasePolicy
-from ...runtime import RuntimeValidator, OnValidatorBudgetExhausted
+from ...runtime import RuntimeValidator, OnValidatorBudgetExhausted, ValidatorMode
 from .adapter import state_to_trace
 
 TraceBuilderFn = Callable[[dict[str, Any]], ExecutionTrace]
@@ -92,6 +92,7 @@ class ValidationNode:
         decision_key: str = "decision",
         max_validator_calls_per_run: int | None = None,
         on_validator_budget_exhausted: OnValidatorBudgetExhausted = "skip",
+        validator_mode: ValidatorMode = "checkpoint",
         trace_builder: TraceBuilderFn | None = None,
     ):
         self._runtime = RuntimeValidator(
@@ -100,6 +101,7 @@ class ValidationNode:
             policy=policy,
             max_validator_calls_per_run=max_validator_calls_per_run,
             on_validator_budget_exhausted=on_validator_budget_exhausted,
+            validator_mode=validator_mode,
         )
         self.trace_key = trace_key
         self.decision_key = decision_key

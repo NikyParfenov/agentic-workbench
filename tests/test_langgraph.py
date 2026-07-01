@@ -11,7 +11,9 @@ from conftest import make_trace, make_routing_event
 from agent_runtime_validator.integrations.langgraph.nodes import ValidationNode, create_validation_router
 from agent_runtime_validator.integrations.langgraph.adapter import state_to_trace, get_trace_from_state
 from agent_runtime_validator.integrations.langgraph import get_trace_from_state as get_trace_top
-from agent_runtime_validator.schema.decisions import ValidationDecision, ValidatorResult
+from agent_runtime_validator.schema.decisions import ValidationDecision, ValidatorResult, TriggerResult
+from agent_runtime_validator.schema.trace import ExecutionTrace
+from agent_runtime_validator.validators.base import BaseValidator
 from agent_runtime_validator.triggers import MaxRoutesTrigger
 
 
@@ -281,3 +283,77 @@ def test_validation_node_writes_trace_for_budget_persistence():
     result2 = node(serialized_state)
     # Decision should reflect exhausted budget (interrupt) not re-run validator
     assert result2["decision"] is not None
+
+
+# --- validator_mode ---
+
+class _CountingValidator(BaseValidator):
+    """Stub validator that counts invocations and always returns continue."""
+
+    def __init__(self):
+        self.call_count = 0
+
+    def validate(
+        self, trace: ExecutionTrace, trigger_results: list[TriggerResult]
+    ) -> ValidatorResult:
+        self.call_count += 1
+        return ValidatorResult(
+            valid=True,
+            confidence=1.0,
+            recommendation="continue",
+            reason="stub",
+        )
+
+
+def test_validation_node_default_validator_mode_is_checkpoint():
+    """Default mode is checkpoint: validator is NOT called when no triggers fire."""
+    validator = _CountingValidator()
+    # MaxRoutesTrigger(max_routes=100) will not fire for a trace with 0 routing events
+    node = ValidationNode(
+        triggers=[MaxRoutesTrigger(max_routes=100)],
+        validator=validator,
+    )
+    trace = make_trace()  # no routing events — trigger won't fire
+    state = {"trace": trace}
+    result = node(state)
+    assert result["decision"].action == "continue"
+    assert validator.call_count == 0
+
+
+def test_validation_node_final_gate_invokes_validator_without_trigger():
+    """final_gate mode: validator IS called even when no triggers fire."""
+    validator = _CountingValidator()
+    node = ValidationNode(
+        triggers=[MaxRoutesTrigger(max_routes=100)],
+        validator=validator,
+        validator_mode="final_gate",
+    )
+    trace = make_trace()  # no routing events — trigger won't fire
+    state = {"trace": trace}
+    result = node(state)
+    assert validator.call_count == 1
+    assert result["decision"].action is not None
+
+
+async def test_validation_node_final_gate_async_invokes_validator_without_trigger():
+    """final_gate mode via async_call: validator IS called even when no triggers fire."""
+    validator = _CountingValidator()
+    node = ValidationNode(
+        triggers=[MaxRoutesTrigger(max_routes=100)],
+        validator=validator,
+        validator_mode="final_gate",
+    )
+    trace = make_trace()  # no routing events — trigger won't fire
+    state = {"trace": trace}
+    result = await node.async_call(state)
+    assert validator.call_count == 1
+    assert result["decision"].action is not None
+
+
+def test_validation_node_invalid_validator_mode_raises():
+    """Passing an invalid validator_mode string should raise ValueError."""
+    with pytest.raises(ValueError):
+        ValidationNode(
+            triggers=[MaxRoutesTrigger(max_routes=10)],
+            validator_mode="not_a_valid_mode",  # type: ignore[arg-type]
+        )
