@@ -191,3 +191,98 @@ def test_explicit_trace_format_overrides_legacy_params():
         trace_format=cfg,
     )
     assert judge._trace_format.max_events_per_section == 77
+
+
+# ---------------------------------------------------------------------------
+# PR8: agent_calls included in trace details
+# ---------------------------------------------------------------------------
+
+def test_agent_calls_included_in_trace_details():
+    from agent_runtime_validator.schema.events import AgentCall
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    agent_calls = [
+        AgentCall(caller="supervisor", callee="researcher", input="go", output="done", timestamp=ts)
+    ]
+    trace = make_trace(agent_calls=agent_calls)
+    cfg = TraceFormatConfig()
+    details = _build_trace_details(trace, [], cfg, None)
+    assert "supervisor" in details
+    assert "researcher" in details
+    assert "done" in details
+
+
+def test_agent_calls_absent_when_empty():
+    trace = make_trace()
+    cfg = TraceFormatConfig()
+    details = _build_trace_details(trace, [], cfg, None)
+    assert "Agent delegations" not in details
+
+
+# ---------------------------------------------------------------------------
+# PR8: truncation notice in section headers
+# ---------------------------------------------------------------------------
+
+def test_truncation_notice_when_clipped():
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    from agent_runtime_validator.schema.events import ToolCall
+    calls = [ToolCall(tool_name="s", call_id=f"c{i}", args={}, timestamp=ts) for i in range(10)]
+    trace = make_trace(tool_calls=calls)
+    cfg = TraceFormatConfig(max_events_per_section=3)
+    details = _build_trace_details(trace, [], cfg, None)
+    assert "showing 3 of 10" in details
+
+
+def test_no_truncation_notice_when_not_clipped():
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    from agent_runtime_validator.schema.events import ToolCall
+    calls = [ToolCall(tool_name="s", call_id=f"c{i}", args={}, timestamp=ts) for i in range(3)]
+    trace = make_trace(tool_calls=calls)
+    cfg = TraceFormatConfig(max_events_per_section=10)
+    details = _build_trace_details(trace, [], cfg, None)
+    assert "showing" not in details
+
+
+# ---------------------------------------------------------------------------
+# PR8: agent_call_count in prompt summary
+# ---------------------------------------------------------------------------
+
+def test_prompt_includes_agent_call_count():
+    from agent_runtime_validator.schema.events import AgentCall
+    ts = datetime(2024, 1, 1, tzinfo=timezone.utc)
+    agent_calls = [
+        AgentCall(caller="sup", callee="sub", input="x", output="y", timestamp=ts)
+        for _ in range(3)
+    ]
+    trace = make_trace(agent_calls=agent_calls)
+    judge = LLMJudgeValidator(
+        model=lambda p: '{"valid":true,"confidence":1.0,"issues":[],"recommendation":"continue","reason":"ok"}',
+        trace_format=TraceFormatConfig(include_trace_details=False),
+    )
+    tr = TriggerResult(triggered=False, trigger_name="T", severity="low", reason="ok")
+    prompt = judge._make_prompt(trace, [tr])
+    assert "agent delegations: 3" in prompt
+
+
+# ---------------------------------------------------------------------------
+# PR8: confidence clamping
+# ---------------------------------------------------------------------------
+
+def test_confidence_clamped_above_one():
+    from agent_runtime_validator.validators.llm_judge import _parse_response
+    raw = '{"valid":true,"confidence":1.5,"issues":[],"recommendation":"continue","reason":"ok"}'
+    result = _parse_response(raw, "interrupt")
+    assert result.confidence == 1.0
+
+
+def test_confidence_clamped_below_zero():
+    from agent_runtime_validator.validators.llm_judge import _parse_response
+    raw = '{"valid":false,"confidence":-0.3,"issues":["x"],"recommendation":"abort","reason":"bad"}'
+    result = _parse_response(raw, "interrupt")
+    assert result.confidence == 0.0
+
+
+def test_confidence_in_range_unchanged():
+    from agent_runtime_validator.validators.llm_judge import _parse_response
+    raw = '{"valid":true,"confidence":0.75,"issues":[],"recommendation":"continue","reason":"ok"}'
+    result = _parse_response(raw, "interrupt")
+    assert result.confidence == 0.75
