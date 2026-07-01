@@ -10,16 +10,16 @@ and may change.
 
 | Area | Included |
 |------|----------|
-| Triggers | Max calls, tokens, time, routes; same-tool loop; same-tool-same-args loop; agent ping-pong; no progress; tool error rate; no tool usage |
-| Validators | NoOp, JSON Schema, tool argument, LLM judge (with trace details, retries, redaction, robust JSON extraction), trigger score |
+| Triggers | Max calls, tokens, time, routes; same-tool loop; same-tool-same-args loop; agent ping-pong; no progress; tool error rate; no tool usage; max agent delegations; agent delegation loop; subagent no output |
+| Validators | NoOp, JSON Schema, tool argument, LLM judge (with trace details, agent delegations section, truncation notices, confidence clamping, retries, redaction, robust JSON extraction), trigger score; `TraceFormatConfig` for prompt shaping |
 | Policy | `DefaultPolicy` with severity-based action mapping, validator escalation/downgrade safety controls |
-| Runtime | Sync and async `RuntimeValidator` with standard-library logging and optional per-run validator call budget |
-| Integrations | LangGraph (`ValidationNode`, `state_to_trace`, `create_validation_router`) |
+| Runtime | Sync and async `RuntimeValidator` with standard-library logging and optional per-run validator call budget; `validator_mode` (`checkpoint` / `final_gate`) |
+| Trace API | `TraceBuilder` fluent API; `trace_to_json`, `trace_from_json`, `save_trace`, `load_trace`; `replay`, `replay_async` for offline re-validation |
+| Integrations | LangGraph (`ValidationNode`, `state_to_trace`, `create_validation_router`, `get_trace_from_state`, `TraceBuilderFn`, async `async_call`) |
 | OSS | GitHub Actions CI, CONTRIBUTING.md, Apache-2.0, typed, examples |
 
-## v0.2 — offline, import, and config
+## v0.2 — import and config
 
-- Trace import/export: JSONL, `ExecutionTrace.model_dump_json`, offline replay helper
 - Trace import from LangSmith, LangFuse, Arize Phoenix
 - Config-driven validation: YAML/TOML configs, presets (strict, cost_saver, research_agent, supervisor)
 - Artifact content validation (schema checks on produced artifacts)

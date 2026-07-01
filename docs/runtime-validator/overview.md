@@ -29,6 +29,9 @@ trace and reacts before the run wastes more time or money.
 | Wall-clock budget exceeded | `MaxExecutionTimeTrigger` |
 | Too many tool calls overall | `MaxToolCallsTrigger` |
 | A specialist agent never used its tools | `NoToolUsageTrigger` |
+| Too many agent-to-agent delegations overall | `MaxAgentCallsTrigger` |
+| Supervisor keeps delegating to the same subagent | `AgentDelegationLoopTrigger` |
+| A subagent was called but returned no output | `SubagentNoOutputTrigger` |
 
 See [Triggers](triggers.md) for parameters and tuning.
 

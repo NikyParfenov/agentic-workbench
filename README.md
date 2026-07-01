@@ -10,7 +10,7 @@ A toolkit for building, validating, evaluating, and benchmarking agentic systems
 
 Runtime validation and recovery for agentic systems.
 
-> **Status: v0.1-alpha.** The core API is usable, but trace import/export, config-driven validation, and broader framework integrations are still evolving.
+> **Status: v0.1-alpha.** The core API is usable, but config-driven validation and broader framework integrations are still evolving.
 
 > **Examples disclaimer:** All examples use fictional agents, tools, datasets, and workflows for demonstration purposes only.
 
@@ -148,6 +148,30 @@ Severity:    high
 Triggered:   ['SameToolSameArgsLoopTrigger', 'NoProgressTrigger', 'ToolErrorRateTrigger']
 ```
 
+## TraceBuilder
+
+`TraceBuilder` is a fluent API for constructing an `ExecutionTrace` step by step, without having to assemble Pydantic objects manually:
+
+```python
+from agent_runtime_validator import TraceBuilder
+
+builder = TraceBuilder(run_id="run-42")
+builder.record_message("user", "analyze dataset X")
+builder.record_tool_call("load_data", call_id="c1", args={"path": "data.csv"})
+builder.record_tool_result("c1", "load_data", output="loaded 1000 rows")
+trace = builder.build()
+
+decision = validator.validate(trace)
+```
+
+Merge a finished subagent trace back into the supervisor builder:
+
+```python
+parent_builder = TraceBuilder.from_trace(parent_trace)
+parent_builder.merge_trace(subagent_trace)
+merged = parent_builder.build()
+```
+
 ## LangGraph Example
 
 ```python
@@ -182,6 +206,10 @@ from agent_runtime_validator.triggers import (
     NoProgressTrigger,            # many tool calls, no artifacts
     ToolErrorRateTrigger,         # error rate above threshold
     NoToolUsageTrigger,           # watched agents made no tool calls
+    # Supervisor / subgraph triggers
+    MaxAgentCallsTrigger,         # too many agent-to-agent delegations
+    AgentDelegationLoopTrigger,   # same (caller, callee) pair repeated
+    SubagentNoOutputTrigger,      # subagent returned no output
 )
 ```
 
@@ -245,7 +273,7 @@ from agent_runtime_validator.validators import LLMJudgeValidator
 
 # Sync model (any callable: str → str)
 judge = LLMJudgeValidator(
-    model=lambda prompt: my_client.generate(prompt)
+    model=lambda prompt: model_backend.complete(prompt)
 )
 
 validator = RuntimeValidator(
@@ -257,7 +285,7 @@ validator = RuntimeValidator(
 
 # Async model (callable: str → Awaitable[str])
 async_judge = LLMJudgeValidator(
-    model=lambda prompt: my_async_client.generate(prompt)
+    model=lambda prompt: async_model_backend.complete(prompt)
 )
 decision = await validator.validate_async(trace)
 ```
@@ -278,6 +306,26 @@ policy = DefaultPolicy(
 validator = RuntimeValidator(triggers=[...], policy=policy)
 ```
 
+## Saving and Replaying Traces
+
+Save a trace to disk and replay it offline against an updated validator config without re-running the graph:
+
+```python
+from agent_runtime_validator import save_trace, load_trace, replay, RuntimeValidator
+from agent_runtime_validator.triggers import SameToolLoopTrigger
+
+# Save after the run
+save_trace(trace, "traces/run-abc.json")
+
+# Later: reload and replay with tightened thresholds
+tuned = RuntimeValidator(triggers=[SameToolLoopTrigger(max_repeats=2)])
+trace = load_trace("traces/run-abc.json")
+decision = replay(trace, tuned)
+print(decision.action, decision.triggered_by)
+```
+
+`save_trace` / `load_trace` read and write UTF-8 JSON. `replay_async` is available for async validators.
+
 ## Logging
 
 ```python
@@ -291,8 +339,8 @@ logging.getLogger("agent_runtime_validator").setLevel(logging.DEBUG)
 
 ## Roadmap
 
-- **v0.1-alpha** — LangGraph, deterministic triggers, trigger score validator, LLM judge, policy safety controls, decision routing, logging
-- **v0.2** — Offline replay, trace import/export, config-driven validation, artifact validation
+- **v0.1-alpha** — LangGraph, deterministic + supervisor triggers, trigger score validator, LLM judge, `TraceBuilder`, trace import/export, offline replay, `validator_mode`, policy safety controls, decision routing, logging
+- **v0.2** — Trace import from LangSmith/LangFuse/Phoenix, config-driven validation, artifact validation
 - **v0.3** — CrewAI, LlamaIndex, OpenAI Agents SDK, PydanticAI, windowed/agent-scoped triggers, default redaction
 - **v0.4** — CompositeValidator, ExecutionInvariantValidator, trigger composition, cost tracking
 - **v1.0** — Incremental runtime API, distributed traces, observability integrations
