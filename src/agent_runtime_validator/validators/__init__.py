@@ -4,6 +4,7 @@ from .jsonschema_validator import JsonSchemaValidator
 from .tool_argument_validator import ToolArgumentValidator
 from .llm_judge import LLMJudgeValidator, DEFAULT_JUDGE_PROMPT
 from .trigger_score import TriggerScoreValidator
+from .trace_format_config import TraceFormatConfig
 
 __all__ = [
     "BaseValidator",
@@ -12,5 +13,6 @@ __all__ = [
     "ToolArgumentValidator",
     "LLMJudgeValidator",
     "TriggerScoreValidator",
+    "TraceFormatConfig",
     "DEFAULT_JUDGE_PROMPT",
 ]

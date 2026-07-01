@@ -5,13 +5,13 @@ from typing import Callable, Awaitable
 from ..schema.trace import ExecutionTrace
 from ..schema.decisions import TriggerResult, ValidatorResult, Recommendation
 from ..utils.redaction import apply_redaction
+from ..utils.truncation import truncate
 from .base import BaseValidator
+from .trace_format_config import TraceFormatConfig
 
 logger = logging.getLogger("agent_runtime_validator")
 
 _RESPONSE_SCHEMA = json.dumps(ValidatorResult.model_json_schema(), indent=2)
-
-_MAX_TEXT_LEN = 500
 
 _JUDGE_TEMPLATE = """\
 You are an agent execution validator. Analyze the following execution trace and triggered alerts, \
@@ -49,66 +49,72 @@ _ESCAPED_SCHEMA = _RESPONSE_SCHEMA.replace("{", "{{").replace("}", "}}")
 DEFAULT_JUDGE_PROMPT = _JUDGE_TEMPLATE.replace("{response_schema}", _ESCAPED_SCHEMA)
 
 
-def _truncate(text: str, max_len: int = _MAX_TEXT_LEN) -> str:
-    if len(text) <= max_len:
-        return text
-    return text[:max_len] + f"... ({len(text)} chars total)"
+def _trunc(text: str, config: TraceFormatConfig, field: str = "field") -> str:
+    max_len = (
+        config.max_chars_artifact_preview if field == "artifact"
+        else config.max_chars_per_field
+    )
+    return truncate(text, max_len, config.truncation)
 
 
 def _build_trace_details(
     trace: ExecutionTrace,
     trigger_results: list[TriggerResult],
-    max_events: int,
+    config: TraceFormatConfig,
     redact_fn: Callable[[str], str] | None,
 ) -> str:
+    n = config.max_events_per_section
     sections: list[str] = []
 
-    messages = trace.messages[-max_events:]
+    messages = trace.messages[-n:] if n else []
     if messages:
         lines = []
         for m in messages:
-            content = _truncate(apply_redaction(m.content, redact_fn))
+            content = _trunc(apply_redaction(m.content, redact_fn), config)
             agent = f" ({m.agent_name})" if m.agent_name else ""
             lines.append(f"  [{m.role}{agent}] {content}")
         sections.append("Messages:\n" + "\n".join(lines))
 
-    routing = trace.routing_events[-max_events:]
+    routing = trace.routing_events[-n:] if n else []
     if routing:
-        lines = [f"  {r.from_agent} -> {r.to_agent}" + (f" ({r.reason})" if r.reason else "") for r in routing]
+        lines = [
+            f"  {r.from_agent} -> {r.to_agent}" + (f" ({r.reason})" if r.reason else "")
+            for r in routing
+        ]
         sections.append("Routing events:\n" + "\n".join(lines))
 
-    calls = trace.tool_calls[-max_events:]
+    calls = trace.tool_calls[-n:] if n else []
     if calls:
         lines = []
         for c in calls:
-            args_str = _truncate(apply_redaction(json.dumps(c.args, default=str), redact_fn))
+            args_str = _trunc(apply_redaction(json.dumps(c.args, default=str), redact_fn), config)
             agent = f" ({c.agent_name})" if c.agent_name else ""
             lines.append(f"  [{c.call_id}]{agent} {c.tool_name}({args_str})")
         sections.append("Tool calls:\n" + "\n".join(lines))
 
-    results = trace.tool_results[-max_events:]
+    results = trace.tool_results[-n:] if n else []
     if results:
         lines = []
         for r in results:
             if r.error:
-                out = f"ERROR: {_truncate(apply_redaction(r.error, redact_fn))}"
+                out = f"ERROR: {_trunc(apply_redaction(r.error, redact_fn), config)}"
             elif r.output:
-                out = _truncate(apply_redaction(r.output, redact_fn))
+                out = _trunc(apply_redaction(r.output, redact_fn), config)
             else:
                 out = "(no output)"
             lines.append(f"  [{r.call_id}] {r.tool_name} -> {out}")
         sections.append("Tool results:\n" + "\n".join(lines))
 
-    artifacts = trace.artifacts[-max_events:]
+    artifacts = trace.artifacts[-n:] if n else []
     if artifacts:
         lines = []
         for a in artifacts:
-            preview = _truncate(apply_redaction(a.content, redact_fn), 200)
+            preview = _trunc(apply_redaction(a.content, redact_fn), config, field="artifact")
             agent = f" ({a.agent_name})" if a.agent_name else ""
             lines.append(f"  {a.artifact_id}{agent} [{a.artifact_type}]: {preview}")
         sections.append("Artifacts:\n" + "\n".join(lines))
 
-    errors = trace.errors[-max_events:]
+    errors = trace.errors[-n:] if n else []
     if errors:
         lines = []
         for e in errors:
@@ -123,7 +129,7 @@ def _build_trace_details(
             evidence_str = json.dumps(t.evidence, default=str) if t.evidence else ""
             lines.append(f"  [{t.severity.upper()}] {t.trigger_name}: {t.reason}")
             if evidence_str:
-                lines.append(f"    evidence: {_truncate(evidence_str, 300)}")
+                lines.append(f"    evidence: {truncate(evidence_str, 300, config.truncation)}")
         sections.append("Fired triggers (detail):\n" + "\n".join(lines))
 
     if not sections:
@@ -135,22 +141,19 @@ def _build_prompt(
     trace: ExecutionTrace,
     trigger_results: list[TriggerResult],
     prompt_template: str,
-    include_trace_details: bool,
-    max_trace_events: int,
+    config: TraceFormatConfig,
     redact_fn: Callable[[str], str] | None,
 ) -> str:
     fired = [t for t in trigger_results if t.triggered]
-    if fired:
-        trigger_summary = "\n".join(
-            f"- [{t.severity.upper()}] {t.trigger_name}: {t.reason}" for t in fired
-        )
-    else:
-        trigger_summary = "No triggers fired."
+    trigger_summary = (
+        "\n".join(f"- [{t.severity.upper()}] {t.trigger_name}: {t.reason}" for t in fired)
+        if fired else "No triggers fired."
+    )
 
-    if include_trace_details:
-        trace_details = _build_trace_details(trace, trigger_results, max_trace_events, redact_fn)
-    else:
-        trace_details = ""
+    trace_details = (
+        _build_trace_details(trace, trigger_results, config, redact_fn)
+        if config.include_trace_details else ""
+    )
 
     return prompt_template.format(
         run_id=trace.run_id,
@@ -209,27 +212,40 @@ class LLMJudgeValidator(BaseValidator):
         max_retries: int = 0,
         fallback_recommendation: Recommendation = "interrupt",
         redact_fn: Callable[[str], str] | None = None,
+        trace_format: TraceFormatConfig | None = None,
     ):
         self.model = model
         self.prompt_template = prompt_template
-        self.include_trace_details = include_trace_details
-        self.max_trace_events = max_trace_events
         self.max_retries = max_retries
         self.fallback_recommendation: Recommendation = fallback_recommendation
         self.redact_fn = redact_fn
 
+        # Resolve effective config: explicit trace_format wins; legacy params otherwise.
+        if trace_format is not None:
+            self._trace_format = trace_format
+        else:
+            self._trace_format = TraceFormatConfig(
+                max_events_per_section=max_trace_events,
+                include_trace_details=include_trace_details,
+            )
+
+        # Keep legacy attributes for backward-compatible attribute access.
+        self.include_trace_details = self._trace_format.include_trace_details
+        self.max_trace_events = self._trace_format.max_events_per_section
+
     def _make_prompt(self, trace: ExecutionTrace, trigger_results: list[TriggerResult]) -> str:
         return _build_prompt(
             trace, trigger_results, self.prompt_template,
-            self.include_trace_details, self.max_trace_events, self.redact_fn,
+            self._trace_format, self.redact_fn,
         )
 
     def validate(
         self, trace: ExecutionTrace, trigger_results: list[TriggerResult]
     ) -> ValidatorResult:
         logger.debug(
-            "LLM judge: include_trace_details=%s max_trace_events=%d",
-            self.include_trace_details, self.max_trace_events,
+            "LLM judge: include_trace_details=%s max_events_per_section=%d",
+            self._trace_format.include_trace_details,
+            self._trace_format.max_events_per_section,
         )
         prompt = self._make_prompt(trace, trigger_results)
         last_raw = ""
@@ -257,8 +273,9 @@ class LLMJudgeValidator(BaseValidator):
         self, trace: ExecutionTrace, trigger_results: list[TriggerResult]
     ) -> ValidatorResult:
         logger.debug(
-            "LLM judge: include_trace_details=%s max_trace_events=%d",
-            self.include_trace_details, self.max_trace_events,
+            "LLM judge: include_trace_details=%s max_events_per_section=%d",
+            self._trace_format.include_trace_details,
+            self._trace_format.max_events_per_section,
         )
         prompt = self._make_prompt(trace, trigger_results)
         last_raw = ""

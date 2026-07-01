@@ -74,14 +74,45 @@ is any `Callable[[str], str]` (sync) or `Callable[[str], Awaitable[str]]`
 (async). If the response cannot be parsed, the result is `valid=False`,
 `confidence=0.0`, recommending `interrupt`.
 
-```python
-from agent_runtime_validator.validators import LLMJudgeValidator
+The trace is always formatted with bounded limits — no unlimited trace dumping.
+Use `TraceFormatConfig` to control those limits.
 
-judge = LLMJudgeValidator(model=lambda prompt: my_client.generate(prompt))
+```python
+from agent_runtime_validator.validators import LLMJudgeValidator, TraceFormatConfig
+
+judge = LLMJudgeValidator(
+    model=lambda prompt: my_client.generate(prompt),
+    trace_format=TraceFormatConfig(
+        max_events_per_section=100,
+        max_chars_per_field=1000,
+        max_chars_artifact_preview=500,
+        truncation="middle_ellipsis",
+    ),
+)
 ```
 
 Override the prompt with `prompt_template=`; the default is exported as
 `DEFAULT_JUDGE_PROMPT`. The checklist it uses is below.
+
+#### TraceFormatConfig
+
+| Parameter | Default | Purpose |
+|-----------|---------|---------|
+| `max_events_per_section` | `50` | Max items from each trace list (messages, tool calls, etc.) |
+| `max_chars_per_field` | `500` | Max chars per text field (args, outputs, errors) |
+| `max_chars_artifact_preview` | `200` | Max chars for artifact content preview |
+| `include_trace_details` | `True` | Include per-event trace sections in prompt |
+| `truncation` | `"tail"` | Truncation strategy: `"tail"`, `"head"`, or `"middle_ellipsis"` |
+
+Truncation strategies:
+- `"tail"` — keep the beginning, drop the end (default; preserves context).
+- `"head"` — drop the beginning, keep the end (preserves recent content).
+- `"middle_ellipsis"` — keep both ends, replace the middle with a marker.
+
+Legacy parameters `max_trace_events` and `include_trace_details` are still
+accepted for backward compatibility and map to `trace_format.max_events_per_section`
+and `trace_format.include_trace_details` respectively. `trace_format` takes
+precedence if both are provided.
 
 > Runnable version: [`examples/llm_judge.py`](../../examples/llm_judge.py).
 
