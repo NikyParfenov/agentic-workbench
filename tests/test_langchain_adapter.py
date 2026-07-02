@@ -444,3 +444,57 @@ def test_response_metadata_key_also_checked():
     assert len(trace.tool_calls) == 1
     assert trace.tool_calls[0].tool_name == "fetch_data"
     assert len(trace.tool_results) == 1
+
+
+# ---------------------------------------------------------------------------
+# 12. ToolMessage error status maps to ToolResult.error
+# ---------------------------------------------------------------------------
+
+class FakeToolMessageWithErrorStatus:
+    type = "tool"
+    content = "ValueError: item not found"
+    tool_call_id = "c9"
+    name = "analyze_item"
+    status = "error"
+
+
+class FakeToolMessageWithSuccessStatus:
+    type = "tool"
+    content = "all good"
+    tool_call_id = "c10"
+    name = "analyze_item"
+    status = "success"
+
+
+def test_tool_message_error_status_maps_to_error():
+    trace = from_langchain_messages([FakeToolMessageWithErrorStatus()])
+    tr = trace.tool_results[0]
+    assert tr.error == "ValueError: item not found"
+    assert tr.output is None
+
+
+def test_tool_message_success_status_maps_to_output():
+    trace = from_langchain_messages([FakeToolMessageWithSuccessStatus()])
+    tr = trace.tool_results[0]
+    assert tr.error is None
+    assert tr.output == "all good"
+
+
+def test_tool_message_error_status_feeds_error_rate_trigger():
+    from agent_runtime_validator.triggers import ToolErrorRateTrigger
+
+    trace = from_langchain_messages([FakeToolMessageWithErrorStatus()])
+    result = ToolErrorRateTrigger(max_error_rate=0.5).evaluate(trace)
+    assert result.triggered
+
+
+# ---------------------------------------------------------------------------
+# 13. _source metadata survives the subgraph-thoughts merge
+# ---------------------------------------------------------------------------
+
+def test_source_preserved_when_thoughts_merged():
+    trace = from_langchain_messages([FakeAIMessageWithThoughts()])
+    # Thought lines were lifted (tool call present) ...
+    assert any(tc.tool_name == "analyze_item" for tc in trace.tool_calls)
+    # ... but the trace-level _source still identifies the primary adapter.
+    assert trace.metadata["_source"] == "langchain_messages"
