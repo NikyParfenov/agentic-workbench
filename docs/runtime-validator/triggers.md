@@ -116,9 +116,9 @@ unhandled exceptions inside a subgraph.
 SubagentNoOutputTrigger(min_stalled=1)  # fire on any stalled subagent
 ```
 
-These triggers populate `trace.agent_calls`. Add an `AgentCall` event each time
-your supervisor dispatches to a subagent and record the `output` when the
-subagent returns:
+These triggers read `trace.agent_calls`; your graph is responsible for
+populating it. Add an `AgentCall` event each time your supervisor dispatches to
+a subagent and record the `output` when the subagent returns:
 
 ```python
 from agent_runtime_validator import TraceBuilder

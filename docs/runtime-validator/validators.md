@@ -60,6 +60,11 @@ When `validator_mode="always"` and the validator recommends stopping
 even if no triggers fired. If triggers also fired, the higher severity of the
 two wins.
 
+Escalations are honored regardless of validator `confidence` (fail-closed);
+the `min_confidence_for_override` gate applies only to downgrades. Keep this
+in mind when choosing `fallback_recommendation` for `LLMJudgeValidator` in
+`"always"` mode — a malformed judge response escalates with `confidence=0.0`.
+
 ### always + budget
 
 `max_validator_calls_per_run` still applies in `"always"` mode. Once the
@@ -177,9 +182,10 @@ The default prompt asks the model to detect:
 - Unnecessary iterations
 - Opportunities to reroute execution to a more suitable agent
 
-Because the judge only runs after a deterministic trigger fires, this deep —
-and potentially expensive — analysis happens only when a run already looks
-suspect.
+In the default `"on_trigger"` mode the judge only runs after a deterministic
+trigger fires, so this deep — and potentially expensive — analysis happens
+only when a run already looks suspect. In `"always"` mode it inspects every
+validation call; pair it with `max_validator_calls_per_run` to bound cost.
 
 ## The ValidatorResult
 

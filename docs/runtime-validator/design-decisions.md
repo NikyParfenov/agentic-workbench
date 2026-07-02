@@ -54,6 +54,11 @@ deliberately. Triggers remain synchronous in both paths.
 
 ## 2026-06-28 — Validator recommendation overrides policy default
 
+> **Superseded by [2026-06-30 — Policy blocks validator downgrades by
+> default](#2026-06-30--policy-blocks-validator-downgrades-by-default):**
+> only *escalations* are accepted unconditionally; downgrades require explicit
+> opt-in plus sufficient confidence.
+
 **Decision:** When a validator returns a `recommendation`, the policy uses it
 instead of the severity-to-action mapping.
 
@@ -118,6 +123,22 @@ they can set `on_validator_budget_exhausted` to `"interrupt"` or `"abort"`.
 Budget state lives in `trace.metadata`, so integrations that parse serialized
 traces must write the updated trace back into state.
 
+## 2026-06-30 — Policy blocks validator downgrades by default
+
+**Decision:** Validator recommendations can escalate the severity-derived action
+by default. Downgrades require explicit opt-in with
+`allow_validator_downgrade=True` and sufficient validator confidence. Critical
+trigger severity cannot be downgraded.
+
+**Reason:** A validator may have deeper context, but deterministic trigger
+evidence should not be silently weakened by a low-confidence or overly optimistic
+validator result.
+
+**Consequences:** Users who want validator recommendations to soften trigger
+responses must opt in deliberately. When a downgrade is rejected, the decision
+reason explains that policy kept the safer action due to severity/confidence
+safeguards.
+
 ## 2026-07-01 — validator_mode separates mid-run monitoring from post-run quality gates
 
 **Decision:** `RuntimeValidator` exposes `validator_mode: Literal["on_trigger",
@@ -136,22 +157,6 @@ when no triggers fired, so that `"always"` verdicts actually affect the
 decision. In `"on_trigger"` mode this change is backward-compatible because the
 validator is never called on clean traces (so `validator_result` is `None` in the
 no-trigger branch and the policy behaves identically).
-
-## 2026-06-30 — Policy blocks validator downgrades by default
-
-**Decision:** Validator recommendations can escalate the severity-derived action
-by default. Downgrades require explicit opt-in with
-`allow_validator_downgrade=True` and sufficient validator confidence. Critical
-trigger severity cannot be downgraded.
-
-**Reason:** A validator may have deeper context, but deterministic trigger
-evidence should not be silently weakened by a low-confidence or overly optimistic
-validator result.
-
-**Consequences:** Users who want validator recommendations to soften trigger
-responses must opt in deliberately. When a downgrade is rejected, the decision
-reason explains that policy kept the safer action due to severity/confidence
-safeguards.
 
 ## Related
 
