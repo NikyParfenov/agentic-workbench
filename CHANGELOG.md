@@ -33,7 +33,8 @@ Initial alpha release.
 - LangGraph integration: `ValidationNode` (sync/async, custom `trace_builder`),
   `create_validation_router` (dynamic reroute gated by explicit allowlist),
   `state_to_trace`, `get_trace_from_state`, `build_trace_from_state`,
-  `from_langchain_messages`, `from_subgraph_thoughts`, `TraceBuilderFn`
+  `from_langchain_messages`, `from_subgraph_thoughts`,
+  `lift_subgraph_messages`, `TraceBuilderFn`
 - `ExecutionTrace`, `ValidationDecision`, `ValidatorResult`, `JudgeFinding`
   Pydantic v2 models
 - Standard library logging under `agent_runtime_validator` logger (opt-in,

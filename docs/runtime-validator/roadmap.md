@@ -15,7 +15,7 @@ and may change.
 | Policy | `DefaultPolicy` with severity-based action mapping, validator escalation/downgrade safety controls |
 | Runtime | Sync and async `RuntimeValidator` with standard-library logging and optional per-run validator call budget; `validator_mode` (`on_trigger` / `always`) |
 | Trace API | `TraceBuilder` fluent API; `trace_to_json`, `trace_from_json`, `save_trace`, `load_trace`; `replay`, `replay_async` for offline re-validation |
-| Integrations | LangGraph (`ValidationNode`, `state_to_trace`, `create_validation_router`, `get_trace_from_state`, `build_trace_from_state`, `from_langchain_messages`, `from_subgraph_thoughts`, `TraceBuilderFn`, async `async_call`) |
+| Integrations | LangGraph (`ValidationNode`, `state_to_trace`, `create_validation_router`, `get_trace_from_state`, `build_trace_from_state`, `from_langchain_messages`, `from_subgraph_thoughts`, `lift_subgraph_messages`, `TraceBuilderFn`, async `async_call`) |
 | OSS | GitHub Actions CI, CONTRIBUTING.md, Apache-2.0, typed, examples |
 
 ## v0.2 — import and config

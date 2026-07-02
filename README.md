@@ -209,6 +209,10 @@ builder.add_edge("validation", "supervisor")
 
 The node reads `state["trace"]` (an `ExecutionTrace`) and writes `state["decision"]` (a `ValidationDecision`).
 
+For nested graphs, keep inner tool messages out of the outer chat history and
+lift them into `ExecutionTrace` with `lift_subgraph_messages(...)` — see
+[docs/runtime-validator/langgraph.md](docs/runtime-validator/langgraph.md#lifting-structured-subgraph-messages).
+
 ## Trigger Reference
 
 Triggers are grouped by the trace event type they inspect.

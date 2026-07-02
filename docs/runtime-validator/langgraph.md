@@ -383,6 +383,68 @@ Routing events and agent calls must be recorded explicitly (e.g. via
 `TraceBuilder`) because no reliable convention exists for expressing them
 inside a plain message list.
 
+## Lifting structured subgraph messages
+
+If an inner graph keeps its full tool conversation local, do not copy those
+`ToolMessage` objects into the outer graph's `messages`. Instead, convert the
+inner messages into an `ExecutionTrace` delta and merge that delta into the
+outer state's `trace` with `lift_subgraph_messages`:
+
+```python
+from agent_runtime_validator.integrations.langgraph import (
+    get_trace_from_state,
+    lift_subgraph_messages,
+)
+
+async def run_worker_subgraph(state: dict) -> dict:
+    result_state = await worker_graph.ainvoke({"messages": []})
+    subgraph_messages = result_state["messages"]
+
+    trace = lift_subgraph_messages(
+        parent_trace=get_trace_from_state(state),
+        subgraph_messages=subgraph_messages,
+        run_id=state.get("run_id", "run"),
+        agent_name="worker",
+        include_subgraph_thoughts=False,  # default
+    )
+
+    final_message = build_worker_summary(subgraph_messages)
+
+    return {
+        "messages": [final_message],
+        "trace": trace,
+    }
+```
+
+This is the preferred production path when structured `AIMessage.tool_calls`
+and `ToolMessage` objects are available. `from_subgraph_thoughts` remains a
+best-effort fallback for textual debug logs, not the primary machine-readable
+trace source — which is why `include_subgraph_thoughts` defaults to `False`
+here.
+
+What you get:
+
+- **Outer messages stay compact.** Only the worker's summary enters the outer
+  chat history — no context bloat, no tool-call pairing breakage after
+  message trimming.
+- **The validator still sees everything.** The lifted `ToolCall` /
+  `ToolResult` events land in the trace, so loop and error-rate triggers keep
+  working.
+- **Parent data is preserved.** Existing events and metadata on the parent
+  trace are never overwritten; the helper records its own marker under
+  `trace.metadata["_last_lifted_source"]`.
+
+Behavior details:
+
+- `parent_trace` accepts an `ExecutionTrace`, a serialized `dict` (after
+  checkpointing), or `None` (starts a fresh trace).
+- `run_id` priority: explicit argument → parent trace's `run_id` →
+  `"subgraph-run"`.
+- Inputs are never mutated; a new trace is returned.
+- Routing events and `AgentCall` events are never inferred from messages —
+  record them explicitly (`TraceBuilder.record_routing` /
+  `record_agent_call`) at the point where routing or delegation happens.
+
 ## Subgraph thoughts adapter
 
 Some LangGraph subgraphs surface their internal reasoning as a list of plain
