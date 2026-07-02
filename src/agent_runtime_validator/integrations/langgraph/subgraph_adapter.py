@@ -182,7 +182,7 @@ def from_subgraph_thoughts(
 
             result_call_id: str = (
                 matched_call.call_id if matched_call is not None
-                else bracket_id or "unknown_tool"
+                else bracket_id or "unmatched-result"
             )
             result_tool_name: str = (
                 matched_call.tool_name if matched_call is not None

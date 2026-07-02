@@ -1,6 +1,6 @@
 """LLM judge with redaction — sensitive data is masked before reaching the model.
 
-The trace contains a patient ID and an email address in tool arguments and
+The trace contains an account ID and an email address in tool arguments and
 results. `redact_fn` strips them before the prompt is built, so the LLM never
 sees the raw values.
 
@@ -22,7 +22,7 @@ def now() -> datetime:
 
 
 def redact(text: str) -> str:
-    text = re.sub(r"P-\d{3,}", "P-***", text)
+    text = re.sub(r"A-\d{3,}", "A-***", text)
     text = re.sub(
         r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b",
         "***@***.***",
@@ -43,17 +43,17 @@ def stub_model(prompt: str) -> str:
         "valid": False,
         "confidence": 0.85,
         "recommendation": "interrupt",
-        "issues": ["Repeated lookup with same patient"],
+        "issues": ["Repeated lookup with same account"],
         "findings": [
             {
                 "category": "repeated_tool_call",
                 "severity": "medium",
                 "confidence": 0.85,
-                "summary": "lookup_patient called 3x with identical args.",
+                "summary": "lookup_account called 3x with identical args.",
                 "evidence": ["c1, c2, c3 all identical"],
             },
         ],
-        "reason": "Agent is stuck retrying the same patient lookup.",
+        "reason": "Agent is stuck retrying the same account lookup.",
     })
 
 
@@ -62,15 +62,15 @@ def build_trace() -> ExecutionTrace:
     for i in range(3):
         cid = f"c{i + 1}"
         trace.tool_calls.append(ToolCall(
-            tool_name="lookup_patient",
+            tool_name="lookup_account",
             call_id=cid,
-            args={"patient_id": "P-90210", "email": "john.doe@hospital.org"},
+            args={"account_id": "A-90210", "email": "jane.doe@example.org"},
             timestamp=now(),
         ))
         trace.tool_results.append(ToolResult(
             call_id=cid,
-            tool_name="lookup_patient",
-            output='{"name": "John Doe", "email": "john.doe@hospital.org", "diagnosis": "..."}',
+            tool_name="lookup_account",
+            output='{"name": "Jane Doe", "email": "jane.doe@example.org", "balance": "..."}',
             timestamp=now(),
         ))
     return trace
