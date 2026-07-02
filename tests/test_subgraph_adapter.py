@@ -234,3 +234,14 @@ def test_result_without_pending_call_uses_unknown_tool():
     assert len(trace.tool_results) == 1
     assert trace.tool_results[0].call_id == "x99"
     assert trace.tool_results[0].tool_name == "unknown_tool"
+
+
+def test_result_with_no_calls_and_no_bracket_gets_unmatched_call_id():
+    """A bare result line with no pending call and no bracket id must not use a
+    tool-name-like value in the call_id field."""
+    trace = from_subgraph_thoughts([
+        "Tool result: orphaned output",
+    ])
+    assert len(trace.tool_results) == 1
+    assert trace.tool_results[0].call_id == "unmatched-result"
+    assert trace.tool_results[0].tool_name == "unknown_tool"

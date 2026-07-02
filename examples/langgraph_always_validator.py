@@ -203,13 +203,13 @@ def run_demo() -> None:
     graph, ts = build_graph()
 
     initial: AgentState = {
-        "trace": ExecutionTrace(run_id="final-gate-demo", started_at=ts),
+        "trace": ExecutionTrace(run_id="always-validator-demo", started_at=ts),
         "decision": None,
         "built_response": None,
         "cycle_count": 0,
     }
 
-    print("=== Final-Gate ResponseBuilder Demo ===\n")
+    print("=== Always-Validator ResponseBuilder Demo ===\n")
     final = graph.invoke(initial)
 
     decision: ValidationDecision | None = final.get("decision")

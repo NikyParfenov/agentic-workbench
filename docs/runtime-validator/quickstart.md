@@ -261,7 +261,9 @@ logging.getLogger("agent_runtime_validator").setLevel(logging.DEBUG)
 | `ERROR` | LLM judge retries exhausted |
 
 No prompts, tool arguments, or trace content are logged — only counts, names,
-severities, and recommendations.
+severities, and recommendations. The one exception: when the LLM judge returns
+an unparseable response, the first 200 characters of that raw response are
+logged at `WARNING` to aid debugging.
 
 ## Related
 
