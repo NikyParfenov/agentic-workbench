@@ -286,3 +286,40 @@ def test_confidence_in_range_unchanged():
     raw = '{"valid":true,"confidence":0.75,"issues":[],"recommendation":"continue","reason":"ok"}'
     result = _parse_response(raw, "interrupt")
     assert result.confidence == 0.75
+
+
+# ---------------------------------------------------------------------------
+# Trigger evidence truncation
+# ---------------------------------------------------------------------------
+
+def _fired_trigger_with_long_evidence(payload: str) -> TriggerResult:
+    return TriggerResult(
+        triggered=True,
+        trigger_name="SameToolLoopTrigger",
+        severity="high",
+        reason="loop detected",
+        evidence={"payload": payload},
+    )
+
+
+def test_trace_format_config_trigger_evidence_default():
+    assert TraceFormatConfig().max_chars_trigger_evidence == 300
+
+
+def test_trigger_evidence_truncated_per_config():
+    payload = "x" * 500
+    trigger = _fired_trigger_with_long_evidence(payload)
+    config = TraceFormatConfig(max_chars_trigger_evidence=40)
+    details = _build_trace_details(make_trace(), [trigger], config, None)
+    evidence_lines = [l for l in details.splitlines() if "evidence:" in l]
+    assert evidence_lines, "evidence line missing from trace details"
+    # "    evidence: " prefix + at most 40 chars of evidence text
+    assert len(evidence_lines[0]) <= len("    evidence: ") + 40
+
+
+def test_trigger_evidence_default_limit_applied():
+    payload = "y" * 1000
+    trigger = _fired_trigger_with_long_evidence(payload)
+    details = _build_trace_details(make_trace(), [trigger], TraceFormatConfig(), None)
+    evidence_lines = [l for l in details.splitlines() if "evidence:" in l]
+    assert len(evidence_lines[0]) <= len("    evidence: ") + 300

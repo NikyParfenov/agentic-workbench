@@ -364,3 +364,68 @@ def test_trigger_score_recommendation_variants():
         )
         result = validator.validate(trace, [_trigger("X")])
         assert result.recommendation == rec
+
+
+# --- LLMJudgeValidator retries ---
+
+_VALID_JUDGE_JSON = (
+    '{"valid": true, "confidence": 0.9, "issues": [],'
+    ' "recommendation": "continue", "reason": "ok"}'
+)
+
+
+def test_llm_judge_retries_then_succeeds():
+    calls = []
+
+    def flaky_model(prompt: str) -> str:
+        calls.append(prompt)
+        return "not json at all" if len(calls) < 3 else _VALID_JUDGE_JSON
+
+    judge = LLMJudgeValidator(model=flaky_model, max_retries=2)
+    result = judge.validate(make_trace(), [])
+    assert len(calls) == 3
+    assert result.valid is True
+    assert result.recommendation == "continue"
+
+
+def test_llm_judge_retries_exhausted_uses_fallback():
+    calls = []
+
+    def broken_model(prompt: str) -> str:
+        calls.append(prompt)
+        return "still not json"
+
+    judge = LLMJudgeValidator(
+        model=broken_model, max_retries=2, fallback_recommendation="abort",
+    )
+    result = judge.validate(make_trace(), [])
+    assert len(calls) == 3  # initial attempt + 2 retries
+    assert result.valid is False
+    assert result.confidence == 0.0
+    assert result.recommendation == "abort"
+
+
+async def test_llm_judge_async_retries_then_succeeds():
+    calls = []
+
+    async def flaky_model(prompt: str) -> str:
+        calls.append(prompt)
+        return "garbage" if len(calls) < 2 else _VALID_JUDGE_JSON
+
+    judge = LLMJudgeValidator(model=flaky_model, max_retries=1)
+    result = await judge.validate_async(make_trace(), [])
+    assert len(calls) == 2
+    assert result.valid is True
+
+
+def test_llm_judge_no_retries_by_default():
+    calls = []
+
+    def broken_model(prompt: str) -> str:
+        calls.append(prompt)
+        return "nope"
+
+    judge = LLMJudgeValidator(model=broken_model)
+    result = judge.validate(make_trace(), [])
+    assert len(calls) == 1
+    assert result.valid is False

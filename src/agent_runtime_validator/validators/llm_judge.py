@@ -161,7 +161,10 @@ def _build_trace_details(
             evidence_str = json.dumps(t.evidence, default=str) if t.evidence else ""
             lines.append(f"  [{t.severity.upper()}] {t.trigger_name}: {t.reason}")
             if evidence_str:
-                lines.append(f"    evidence: {truncate(evidence_str, 300, config.truncation)}")
+                lines.append(
+                    f"    evidence: "
+                    f"{truncate(evidence_str, config.max_chars_trigger_evidence, config.truncation)}"
+                )
         sections.append("Fired triggers (detail):\n" + "\n".join(lines))
 
     if not sections:
