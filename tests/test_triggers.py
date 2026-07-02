@@ -324,6 +324,40 @@ def test_pingpong_not_triggered_one_cycle():
     assert result.triggered is False
 
 
+def test_pingpong_single_route_not_a_cycle():
+    # A→B followed by an unrelated route is not a ping-pong cycle, even at
+    # the most sensitive setting.
+    trace = make_trace(routing_events=[
+        make_routing_event("A", "B"),
+        make_routing_event("B", "C"),
+    ])
+    trigger = AgentPingPongTrigger(max_cycles=1)
+    result = trigger.evaluate(trace)
+    assert result.triggered is False
+
+
+def test_pingpong_one_round_trip_fires_at_max_cycles_one():
+    trace = make_trace(routing_events=[
+        make_routing_event("A", "B"),
+        make_routing_event("B", "A"),
+    ])
+    trigger = AgentPingPongTrigger(max_cycles=1)
+    result = trigger.evaluate(trace)
+    assert result.triggered is True
+
+
+def test_pingpong_incomplete_return_not_counted():
+    # A→B, B→A, A→B is one completed round trip plus an outbound leg — not two.
+    trace = make_trace(routing_events=[
+        make_routing_event("A", "B"),
+        make_routing_event("B", "A"),
+        make_routing_event("A", "B"),
+    ])
+    trigger = AgentPingPongTrigger(max_cycles=2)
+    result = trigger.evaluate(trace)
+    assert result.triggered is False
+
+
 def test_pingpong_trigger_name():
     trace = make_trace()
     trigger = AgentPingPongTrigger(max_cycles=2)

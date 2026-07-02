@@ -4,7 +4,12 @@ from .base import BaseTrigger
 
 
 class AgentPingPongTrigger(BaseTrigger):
-    """Fires when the same pair of agents routes back and forth repeatedly."""
+    """Fires when the same pair of agents routes back and forth repeatedly.
+
+    A *cycle* is one completed round trip: ``A → B`` followed by ``B → A``.
+    ``max_cycles`` is the number of consecutive round trips at which the
+    trigger fires — an outbound leg without the return does not count.
+    """
 
     def __init__(self, max_cycles: int, severity: Severity = "high"):
         self.max_cycles = max_cycles
@@ -21,43 +26,39 @@ class AgentPingPongTrigger(BaseTrigger):
                 evidence={"max_cycles": self.max_cycles},
             )
 
-        # Count consecutive back-and-forth cycles between any pair
-        max_cycles_seen = 0
+        # Scan for runs of consecutive alternating events (each event reverses
+        # the previous one); a run of length L contains L // 2 round trips.
+        max_round_trips = 0
         worst_pair: tuple[str, str] | None = None
+        run_start = 0
 
-        # For each ordered pair, track how many alternating round trips occurred
-        i = 0
-        while i < len(events) - 1:
-            a_to_b = (events[i].from_agent, events[i].to_agent)
-            b_to_a = (events[i].to_agent, events[i].from_agent)
-            cycles = 1
-            j = i + 1
-            while j < len(events) - 1:
-                if (events[j].from_agent, events[j].to_agent) == b_to_a:
-                    if (events[j + 1].from_agent, events[j + 1].to_agent) == a_to_b:
-                        cycles += 1
-                        j += 2
-                        continue
-                break
-            if cycles > max_cycles_seen:
-                max_cycles_seen = cycles
-                worst_pair = a_to_b
-            i += 1
+        for k in range(1, len(events) + 1):
+            alternates = (
+                k < len(events)
+                and events[k].from_agent == events[k - 1].to_agent
+                and events[k].to_agent == events[k - 1].from_agent
+            )
+            if not alternates:
+                round_trips = (k - run_start) // 2
+                if round_trips > max_round_trips:
+                    max_round_trips = round_trips
+                    worst_pair = (events[run_start].from_agent, events[run_start].to_agent)
+                run_start = k
 
-        triggered = max_cycles_seen >= self.max_cycles
+        triggered = max_round_trips >= self.max_cycles
         pair_str = f"{worst_pair[0]} ↔ {worst_pair[1]}" if worst_pair else "unknown"
         return TriggerResult(
             triggered=triggered,
             trigger_name="AgentPingPongTrigger",
             severity=self.severity,
             reason=(
-                f"Agents {pair_str} ping-ponged {max_cycles_seen} times (limit {self.max_cycles})"
+                f"Agents {pair_str} ping-ponged {max_round_trips} round trip(s) (limit {self.max_cycles})"
                 if triggered
-                else f"No agent pair ping-ponged {self.max_cycles}+ times"
+                else f"No agent pair completed {self.max_cycles}+ ping-pong round trips"
             ),
             evidence={
                 "pair": list(worst_pair) if worst_pair else None,
-                "cycles": max_cycles_seen,
+                "cycles": max_round_trips,
                 "max_cycles": self.max_cycles,
             },
         )

@@ -58,8 +58,10 @@ frequent entry reaching `max_repeats`.
 ### Routing triggers
 
 `MaxRoutesTrigger` caps total hand-offs. `AgentPingPongTrigger` looks for a pair
-of agents alternating `A → B → A → B`; `max_cycles` is how many round trips are
-allowed before it fires. It needs at least two routing events.
+of agents alternating `A → B → A → B`; it fires when a pair completes
+`max_cycles` consecutive round trips (a round trip is `A → B` followed by
+`B → A` — an outbound leg without the return does not count). It needs at
+least two routing events.
 
 ### Progress and quality triggers
 
