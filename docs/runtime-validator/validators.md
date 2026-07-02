@@ -147,6 +147,7 @@ Override the prompt with `prompt_template=`; the default is exported as
 | `max_events_per_section` | `50` | Max items from each trace list (messages, tool calls, etc.) |
 | `max_chars_per_field` | `500` | Max chars per text field (args, outputs, errors) |
 | `max_chars_artifact_preview` | `200` | Max chars for artifact content preview |
+| `max_chars_trigger_evidence` | `300` | Max chars for each fired trigger's evidence JSON |
 | `include_trace_details` | `True` | Include per-event trace sections in prompt |
 | `truncation` | `"tail"` | Truncation strategy: `"tail"`, `"head"`, or `"middle_ellipsis"` |
 
