@@ -120,11 +120,14 @@ class ValidationNode:
         return state_to_trace(state)
 
     def __call__(self, state: dict[str, Any]) -> dict[str, Any]:
+        # Return only the updated keys: LangGraph treats the return value as a
+        # state update, and echoing untouched keys re-applies their reducers
+        # (e.g. an operator.add messages channel would duplicate its entries).
         trace = self._resolve_trace(state)
         decision = self._runtime.validate(trace)
-        return {**state, self.trace_key: trace, self.decision_key: decision}
+        return {self.trace_key: trace, self.decision_key: decision}
 
     async def async_call(self, state: dict[str, Any]) -> dict[str, Any]:
         trace = self._resolve_trace(state)
         decision = await self._runtime.validate_async(trace)
-        return {**state, self.trace_key: trace, self.decision_key: decision}
+        return {self.trace_key: trace, self.decision_key: decision}
