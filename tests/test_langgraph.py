@@ -357,3 +357,10 @@ def test_validation_node_invalid_validator_mode_raises():
             triggers=[MaxRoutesTrigger(max_routes=10)],
             validator_mode="not_a_valid_mode",  # type: ignore[arg-type]
         )
+
+
+def test_router_interrupt_default_end():
+    """An unmapped interrupt must not silently continue — it ends the run."""
+    from langgraph.graph import END
+    router = create_validation_router(continue_to="supervisor")
+    assert router({"decision": _decision("interrupt")}) == END

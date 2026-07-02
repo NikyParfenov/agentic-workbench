@@ -181,9 +181,12 @@ to the suggested node instead.
 | `continue_to` | — | Node for `continue` (required) |
 | `retry_to` | `continue_to` | Node for `retry_last_step` |
 | `reroute_to` | `continue_to` | Fallback node for `reroute` |
-| `interrupt_to` | `continue_to` | Node for `interrupt` |
+| `interrupt_to` | `END` | Node for `interrupt` (map to a human-review node to keep the graph running) |
 | `abort_to` | `END` | Node for `abort` |
 | `allowed_reroutes` | `None` | Allowlist for `suggested_next_agent`; `None` = ignore suggested, use `reroute_to` |
+
+Stop decisions are safe by default: an unmapped `interrupt` or `abort` ends the
+run rather than silently routing back to `continue_to`.
 
 By default `suggested_next_agent` is ignored — reroute always goes to
 `reroute_to`. Pass an explicit set of node names to opt in to dynamic rerouting.
