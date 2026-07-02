@@ -38,9 +38,11 @@ def create_validation_router(
     """Create a conditional routing function for LangGraph based on ValidationDecision.
 
     Returns a callable suitable for ``builder.add_conditional_edges(node, router)``.
-    Each action maps to a node name. ``continue_to`` is required; the others
-    default to ``continue_to`` if not set, except ``abort_to`` which defaults
-    to ``END``.
+    Each action maps to a node name. ``continue_to`` is required; ``retry_to``
+    and ``reroute_to`` default to ``continue_to``. ``interrupt_to`` and
+    ``abort_to`` default to ``END`` — a stop decision must never silently
+    continue, so map ``interrupt_to`` explicitly (e.g. to a human-review node)
+    if the graph should keep running.
 
     ``allowed_reroutes`` is an explicit allowlist of node names that
     ``suggested_next_agent`` can resolve to. By default (``None``),
@@ -48,6 +50,7 @@ def create_validation_router(
     ``reroute_to``. Pass a set to opt in to dynamic rerouting.
     """
     abort_target = abort_to if abort_to is not None else END
+    interrupt_target = interrupt_to if interrupt_to is not None else END
 
     def router(state: dict) -> str:
         raw = state.get(decision_key)
@@ -73,7 +76,7 @@ def create_validation_router(
                     return decision.validator_result.suggested_next_agent
                 return reroute_to if reroute_to is not None else continue_to
             case "interrupt":
-                return interrupt_to if interrupt_to is not None else continue_to
+                return interrupt_target
             case "abort":
                 return abort_target
             case _:

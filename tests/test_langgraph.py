@@ -390,3 +390,10 @@ def test_validation_node_custom_keys_returns_only_those_keys():
     state = {"execution_trace": trace, "messages": ["m1"]}
     result = node(state)
     assert set(result.keys()) == {"execution_trace", "validation_result"}
+
+
+def test_router_interrupt_default_end():
+    """An unmapped interrupt must not silently continue — it ends the run."""
+    from langgraph.graph import END
+    router = create_validation_router(continue_to="supervisor")
+    assert router({"decision": _decision("interrupt")}) == END
