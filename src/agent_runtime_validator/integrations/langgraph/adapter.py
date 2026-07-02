@@ -16,6 +16,19 @@ from ...schema.events import ArtifactEvent
 from ...schema.trace import ExecutionTrace
 from ...trace_builder import TraceBuilder
 
+# Metadata keys tracking how many state entries were already merged into the
+# trace, so repeated calls (e.g. a ValidationNode running on every graph step)
+# never duplicate previously merged events.
+_MERGED_MESSAGES_KEY = "_merged_message_count"
+_MERGED_ARTIFACTS_KEY = "_merged_artifact_count"
+
+
+def _merged_count(trace: ExecutionTrace, key: str) -> int:
+    value = trace.metadata.get(key, 0)
+    if isinstance(value, int) and value >= 0:
+        return value
+    return 0
+
 
 def state_to_trace(state: dict[str, Any], run_id: str | None = None) -> ExecutionTrace:
     return ExecutionTrace(
@@ -102,8 +115,8 @@ def build_trace_from_state(
         Agent name attached to ``MessageEvent`` and ``ToolCall`` entries
         produced from messages.
     metadata:
-        Extra metadata to merge into the trace. Existing keys are preserved
-        unless the caller provides the same key.
+        Extra metadata to merge into the trace. Keys already present on the
+        trace always win; only missing keys are added.
     include_subgraph_thoughts:
         When ``True`` (default), subgraph thought lines are lifted from each
         message's metadata dicts and merged into the trace.
@@ -120,6 +133,11 @@ def build_trace_from_state(
     - Routing events and agent calls are never inferred.
     - LangChain is not required; duck typing is used throughout.
     - The input *state* is never mutated.
+    - Repeated calls are safe: the number of already-merged messages and
+      artifacts is tracked in ``trace.metadata`` (``"_merged_message_count"``,
+      ``"_merged_artifact_count"``), so passing the returned trace back in via
+      ``state[trace_key]`` — as ``ValidationNode`` does — only merges entries
+      added since the previous call.
     """
     ts: datetime = started_at if started_at is not None else datetime.now(timezone.utc)
 
@@ -179,31 +197,40 @@ def build_trace_from_state(
         working_trace = ExecutionTrace(run_id=resolved_run_id, started_at=ts)
 
     # ------------------------------------------------------------------
-    # Step 4: merge messages if present
+    # Step 4: merge messages if present (only entries not merged before)
     # ------------------------------------------------------------------
     raw_messages = state.get(messages_key)
-    if isinstance(raw_messages, list) and raw_messages:
-        # Lazy import to avoid circular imports at module level.
-        from .langchain_adapter import from_langchain_messages
+    merged_message_mark: int | None = None
+    if isinstance(raw_messages, list):
+        already_merged = _merged_count(working_trace, _MERGED_MESSAGES_KEY)
+        new_messages = raw_messages[min(already_merged, len(raw_messages)):]
+        merged_message_mark = len(raw_messages)
+        if new_messages:
+            # Lazy import to avoid circular imports at module level.
+            from .langchain_adapter import from_langchain_messages
 
-        messages_trace = from_langchain_messages(
-            raw_messages,
-            run_id=resolved_run_id,
-            started_at=ts,
-            agent_name=agent_name,
-            include_subgraph_thoughts=include_subgraph_thoughts,
-            subgraph_thoughts_key=subgraph_thoughts_key,
-        )
-        working_trace = TraceBuilder.from_trace(working_trace).merge_trace(messages_trace).build()
+            messages_trace = from_langchain_messages(
+                new_messages,
+                run_id=resolved_run_id,
+                started_at=ts,
+                agent_name=agent_name,
+                include_subgraph_thoughts=include_subgraph_thoughts,
+                subgraph_thoughts_key=subgraph_thoughts_key,
+            )
+            working_trace = TraceBuilder.from_trace(working_trace).merge_trace(messages_trace).build()
 
     # ------------------------------------------------------------------
-    # Step 5: merge artifacts if present
+    # Step 5: merge artifacts if present (only entries not merged before)
     # ------------------------------------------------------------------
+    merged_artifact_mark: int | None = None
     if artifacts_key is not None:
         raw_artifacts = state.get(artifacts_key)
         if isinstance(raw_artifacts, list):
+            already_merged = _merged_count(working_trace, _MERGED_ARTIFACTS_KEY)
+            new_artifacts = raw_artifacts[min(already_merged, len(raw_artifacts)):]
+            merged_artifact_mark = len(raw_artifacts)
             collected: list[ArtifactEvent] = []
-            for item in raw_artifacts:
+            for item in new_artifacts:
                 if isinstance(item, ArtifactEvent):
                     collected.append(item)
                 elif isinstance(item, dict):
@@ -215,17 +242,29 @@ def build_trace_from_state(
             if collected:
                 builder = TraceBuilder.from_trace(working_trace)
                 for artifact in collected:
-                    builder._artifacts.append(artifact)
+                    builder.record_artifact(
+                        artifact_id=artifact.artifact_id,
+                        artifact_type=artifact.artifact_type,
+                        content=artifact.content,
+                        agent_name=artifact.agent_name,
+                        timestamp=artifact.timestamp,
+                        metadata=artifact.metadata,
+                    )
                 working_trace = builder.build()
 
     # ------------------------------------------------------------------
-    # Step 6: merge provided metadata (do not overwrite existing keys)
+    # Step 6: merge provided metadata (existing keys win) and record marks
     # ------------------------------------------------------------------
+    final_meta = dict(working_trace.metadata)
     if metadata:
-        merged_meta = dict(working_trace.metadata)
         for k, v in metadata.items():
-            if k not in merged_meta:
-                merged_meta[k] = v
+            final_meta.setdefault(k, v)
+    if merged_message_mark is not None:
+        final_meta[_MERGED_MESSAGES_KEY] = merged_message_mark
+    if merged_artifact_mark is not None:
+        final_meta[_MERGED_ARTIFACTS_KEY] = merged_artifact_mark
+
+    if final_meta != working_trace.metadata:
         working_trace = ExecutionTrace(
             run_id=working_trace.run_id,
             started_at=working_trace.started_at,
@@ -237,7 +276,7 @@ def build_trace_from_state(
             routing_events=list(working_trace.routing_events),
             artifacts=list(working_trace.artifacts),
             errors=list(working_trace.errors),
-            metadata=merged_meta,
+            metadata=final_meta,
             token_usage=working_trace.token_usage,
         )
 

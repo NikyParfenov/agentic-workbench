@@ -267,3 +267,82 @@ def test_as_validation_node_trace_builder_lambda():
     state = {"run_id": "lambda-run", "messages": [FakeMsg()]}
     result = node(state)
     assert result["decision"] is not None
+
+
+# ---------------------------------------------------------------------------
+# 16. Repeated calls (validation loop) must not duplicate previously merged events
+# ---------------------------------------------------------------------------
+
+def test_repeated_calls_do_not_duplicate_messages():
+    state: dict = {"run_id": "loop-run", "messages": [FakeAIMessage()]}
+    first = build_trace_from_state(state)
+    assert len(first.messages) == 1
+    assert len(first.tool_calls) == 1
+
+    # Simulate the next validation step: trace written back into state,
+    # messages unchanged.
+    second = build_trace_from_state({**state, "trace": first})
+    assert len(second.messages) == 1
+    assert len(second.tool_calls) == 1
+
+
+def test_new_messages_merged_incrementally():
+    msg1, msg2 = FakeAIMessage(), FakeHumanMessage()
+    state: dict = {"run_id": "loop-run", "messages": [msg1]}
+    first = build_trace_from_state(state)
+
+    second = build_trace_from_state({**state, "trace": first, "messages": [msg1, msg2]})
+    # Only msg2 is new: 2 messages total, tool call from msg1 not re-merged.
+    assert len(second.messages) == 2
+    assert len(second.tool_calls) == 1
+
+
+def test_repeated_calls_do_not_duplicate_artifacts():
+    artifact = ArtifactEvent(
+        artifact_id="a1", artifact_type="report", content="text", timestamp=_TS,
+    )
+    state: dict = {"artifacts": [artifact]}
+    first = build_trace_from_state(state)
+    assert len(first.artifacts) == 1
+
+    second = build_trace_from_state({**state, "trace": first})
+    assert len(second.artifacts) == 1
+
+
+def test_repeated_calls_do_not_duplicate_subgraph_thoughts():
+    state: dict = {"messages": [FakeAIMessageWithThoughts()]}
+    first = build_trace_from_state(state)
+    assert len(first.tool_calls) == 1
+
+    second = build_trace_from_state({**state, "trace": first})
+    assert len(second.tool_calls) == 1
+
+
+def test_merge_marks_survive_serialized_trace():
+    state: dict = {"messages": [FakeAIMessage()]}
+    first = build_trace_from_state(state)
+
+    # Simulate LangGraph checkpointing: trace round-trips through a plain dict.
+    second = build_trace_from_state({**state, "trace": first.model_dump()})
+    assert len(second.messages) == 1
+    assert len(second.tool_calls) == 1
+
+
+def test_validation_node_repeated_calls_do_not_fire_loop_trigger():
+    from agent_runtime_validator.integrations.langgraph import ValidationNode
+    from agent_runtime_validator.triggers import SameToolLoopTrigger
+
+    node = ValidationNode(
+        triggers=[SameToolLoopTrigger(max_repeats=3)],
+        trace_builder=lambda s: build_trace_from_state(s),
+    )
+    # One real tool call in the conversation; the node runs three times.
+    state: dict = {"run_id": "graph-run", "messages": [FakeAIMessage()]}
+    for _ in range(3):
+        state = {**state, **node(state)}
+
+    trace = state["trace"]
+    decision = state["decision"]
+    assert len(trace.tool_calls) == 1
+    assert decision.action == "continue"
+    assert decision.triggered_by == []

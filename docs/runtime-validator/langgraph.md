@@ -450,6 +450,12 @@ validation_node = ValidationNode(
 
 Key notes:
 
+- Repeated calls are safe. The helper records how many messages and artifacts
+  it has already merged in `trace.metadata["_merged_message_count"]` /
+  `trace.metadata["_merged_artifact_count"]`, so when `ValidationNode` writes
+  the trace back into state and runs again on the next step, only entries added
+  since the previous call are merged — events are never duplicated.
+
 - Use this function when state has LangChain messages and/or an existing trace.
   For graphs that build events manually via `TraceBuilder`, use
   `TraceBuilder.record_routing` / `record_agent_call` for routing and semantic
