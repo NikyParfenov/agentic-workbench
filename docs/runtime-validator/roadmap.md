@@ -18,20 +18,26 @@ and may change.
 | Integrations | LangGraph (`ValidationNode`, `state_to_trace`, `create_validation_router`, `get_trace_from_state`, `build_trace_from_state`, `from_langchain_messages`, `from_subgraph_thoughts`, `lift_subgraph_messages`, `TraceBuilderFn`, async `async_call`) |
 | OSS | GitHub Actions CI, CONTRIBUTING.md, Apache-2.0, typed, examples |
 
-## v0.2 — import and config
+## v0.2 — production trace ergonomics and config
 
-- Trace import from LangSmith, LangFuse, Arize Phoenix
-- Config-driven validation: YAML/TOML configs, presets (strict, cost_saver, research_agent, supervisor)
-- Artifact content validation (schema checks on produced artifacts)
+- Config-driven validation: YAML/TOML configs and reusable profiles (strict,
+  cost_saver, supervisor, final_output_gate)
+- Artifact mapping and validation: helpers/patterns for converting project
+  artifacts into `ArtifactEvent` plus schema/content checks on produced artifacts
+- Agent-scoped and windowed trigger filtering (`agent_names`, `window_size`,
+  `consecutive`, `ignore_tools`) for large nested traces
+- Trace-emitter patterns for nested graphs: documenting `state["trace"]` as the
+  machine-readable telemetry channel separate from chat `messages`
+- Safer default trace formatting/redaction profiles for traces passed to LLM
+  judges
 - Pre-execution tool argument validation hooks
 
-## v0.3 — more frameworks and trigger improvements
+## v0.3 — more frameworks and integration polish
 
 - Integrations: CrewAI, LlamaIndex, OpenAI Agents SDK, PydanticAI
-- Agent-scoped trigger filtering (`agent_names`, `window_size`, `consecutive`, `ignore_tools`)
 - Optional `tiktoken` extra for token counting (keep `len//4` fallback)
 - LLM judge provider examples: OpenAI, Anthropic, LiteLLM, local models
-- Default redaction utilities (emails, phone numbers, API keys, bearer tokens)
+- Packaging and integration examples for non-LangGraph runtimes
 
 ## v0.4 — composition and recovery
 
@@ -40,6 +46,8 @@ and may change.
 - Configurable trigger composition (AND/OR logic between triggers)
 - Cost-tracking trigger (dollar budget, not just tokens)
 - Webhook/callback on decision
+- Offline observability trace importers, starting with one provider before
+  broadening support
 
 ## v1.0 — scale
 
@@ -47,7 +55,7 @@ and may change.
 - Decentralized multi-agent support
 - Graph cycle and deadlock detection
 - Distributed trace support (span_id, parent_span_id, service spans)
-- LangSmith / LangFuse / Phoenix trace importers
+- LangSmith / LangFuse / Phoenix trace importers and replay workflows
 - OpenTelemetry / Prometheus integration
 - Real-time dashboard / observability integration
 - Stable extension API for custom triggers, validators, and policies

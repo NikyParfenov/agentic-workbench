@@ -388,7 +388,7 @@ logging.getLogger("agent_runtime_validator").setLevel(logging.DEBUG)
 ## Roadmap
 
 - **v0.1-alpha** — LangGraph, deterministic + supervisor triggers, trigger score validator, LLM judge, `TraceBuilder`, trace import/export, offline replay, `validator_mode`, policy safety controls, decision routing, logging
-- **v0.2** — Trace import from LangSmith/LangFuse/Phoenix, config-driven validation, artifact validation
-- **v0.3** — CrewAI, LlamaIndex, OpenAI Agents SDK, PydanticAI, windowed/agent-scoped triggers, default redaction
-- **v0.4** — CompositeValidator, ExecutionInvariantValidator, trigger composition, cost tracking
-- **v1.0** — Incremental runtime API, distributed traces, observability integrations
+- **v0.2** — Production trace ergonomics: config-driven validation, artifact mapping/validation, agent-scoped/windowed triggers, trace-emitter patterns, safer redaction defaults
+- **v0.3** — CrewAI, LlamaIndex, OpenAI Agents SDK, PydanticAI, provider examples, packaging/integration polish
+- **v0.4** — CompositeValidator, ExecutionInvariantValidator, trigger composition, cost tracking, offline observability trace importers
+- **v1.0** — Incremental runtime API, distributed traces, OpenTelemetry/Prometheus, stable observability integrations
