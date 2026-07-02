@@ -50,5 +50,7 @@ uv build
 - **Validators are optional.** The system works with triggers + policy alone.
 - **The core is framework-agnostic.** Framework specifics live in `integrations/`.
 - **All triggers run on every call.** The pipeline does not short-circuit.
-- **Validators only run when a trigger fires.** The healthy path stays fast.
+- **Validators only run when a trigger fires (default mode).** The healthy path
+  stays fast; `validator_mode="always"` is the explicit opt-in for
+  run-every-time quality checks.
 - **Policies are separate from validation.** Validators recommend; policies decide.

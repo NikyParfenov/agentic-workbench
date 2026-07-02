@@ -61,7 +61,7 @@ This is not a safety moderation library. It does not replace input/output guardr
 ExecutionTrace
      ↓
 Triggers  →  TriggerResult[]
-     ↓  (only if triggers fired and validator budget allows)
+     ↓  (per validator_mode: when triggers fired, or always — budget permitting)
 Validator  →  ValidatorResult | skipped
      ↓
 Policy  →  ValidationDecision
@@ -69,9 +69,26 @@ Policy  →  ValidationDecision
 
 **Triggers** are deterministic and fast. They fire on observable patterns (loop counts, routing depth, error rates).
 
-**Validators** are optional. `LLMJudgeValidator` invokes an LLM only when triggers fire — not on every step. For retry/reroute loops, set `max_validator_calls_per_run=1` to cap expensive validator calls per trace/run.
+**Validators** are optional. In the default `validator_mode="on_trigger"`, `LLMJudgeValidator` invokes an LLM only when triggers fire — not on every step. For retry/reroute loops, set `max_validator_calls_per_run=1` to cap expensive validator calls per trace/run.
 
 **Policies** map trigger severity + validator recommendations to decisions.
+
+### Validator mode
+
+`validator_mode` controls when the validator stage runs:
+
+- `"on_trigger"` (default) — the validator runs only when at least one trigger fires. The common "all-clear" path never calls it. Use for inline mid-run monitoring.
+- `"always"` — the validator runs on every validation call, regardless of trigger results. Use when the validator is a quality check that should inspect every completed trace.
+
+```python
+validator = RuntimeValidator(
+    triggers=[...],
+    validator=judge,
+    validator_mode="always",
+)
+```
+
+See [docs/runtime-validator/validators.md](docs/runtime-validator/validators.md#validator-mode) for details.
 
 ## Installation
 

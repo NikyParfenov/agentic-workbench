@@ -89,7 +89,7 @@ are required.
 | `confidence` | `float` 0–1 | Validator confidence |
 | `issues` | `list[str]` | Problems found |
 | `findings` | `list[JudgeFinding]` | Structured findings (category, severity, evidence) |
-| `recommendation` | `Action` | Overrides policy default when present |
+| `recommendation` | `Action` | Can escalate the policy's severity-based action; downgrades need opt-in |
 | `reason` | `str` | Explanation |
 | `suggested_next_agent` | `str \| None` | Hint for `reroute` |
 | `suggested_message` | `str \| None` | Message to inject next |
@@ -141,7 +141,10 @@ healthy path performs no extra work. Validator call budget state is kept in
 | `critical` | `abort` | `interrupt` (`abort_on_critical=False`) |
 
 **Validator escalation** — a validator's `recommendation` can raise the
-action above the severity default. Escalation is always accepted.
+action above the severity default. Escalation is always accepted, regardless
+of `confidence` — the policy treats "stop" signals as fail-closed. Note that
+`LLMJudgeValidator`'s malformed-response fallback recommends `interrupt` with
+`confidence=0.0`, so an unparseable judge response escalates by design.
 
 **Validator downgrade** — a validator recommending a less severe action than
 the trigger-derived default is blocked unless `allow_validator_downgrade=True`
@@ -157,13 +160,15 @@ Otherwise the decision is `continue`.
 ```
 src/agent_runtime_validator/
 ├── runtime.py            # RuntimeValidator
+├── trace_builder.py      # TraceBuilder fluent API
+├── replay.py             # replay / replay_async
 ├── schema/               # ExecutionTrace, events, decisions
 ├── triggers/             # BaseTrigger + built-in triggers
 ├── validators/           # BaseValidator + built-in validators
 ├── policies/             # BasePolicy + DefaultPolicy
-├── utils/                # token counting, hashing, redaction
+├── utils/                # token counting, hashing, redaction, trace I/O, truncation
 └── integrations/
-    └── langgraph/        # adapter + ValidationNode
+    └── langgraph/        # adapters + ValidationNode + router
 ```
 
 ## Extension points
