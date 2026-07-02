@@ -102,11 +102,14 @@ node = ValidationNode(
 
 ### How the node resolves the trace
 
-When called, the node resolves the trace and then returns
-`{**state, trace_key: trace, decision_key: decision}`, leaving all other
-state fields untouched. Writing the resolved trace back into state ensures
-`trace.metadata` (including validator call budget) persists across subsequent
-node invocations, even when the trace was originally passed as a serialized dict.
+When called, the node resolves the trace and returns
+`{trace_key: trace, decision_key: decision}` — a partial state update, which is
+what LangGraph expects from a node. Returning only the updated keys matters:
+echoing untouched keys would re-apply their reducers (an `operator.add`
+messages channel would duplicate its entries on every validation step).
+Writing the resolved trace back into state ensures `trace.metadata` (including
+validator call budget) persists across subsequent node invocations, even when
+the trace was originally passed as a serialized dict.
 
 **With `trace_builder=None` (default)** the node applies this three-tier lookup:
 
@@ -246,8 +249,8 @@ entirely.
 ## Trace persistence and archiving
 
 `ValidationNode` writes the resolved `ExecutionTrace` back into state on every
-call (`{**state, trace_key: trace, decision_key: decision}`). This is important
-for two reasons:
+call (returning the `{trace_key: trace, decision_key: decision}` update). This
+is important for two reasons:
 
 1. **Budget continuity** — `trace.metadata["_runtime_validator_call_count"]`
    persists across node invocations. Without writing the trace back, the budget

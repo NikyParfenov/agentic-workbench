@@ -23,7 +23,8 @@ def test_validation_node_returns_continue_when_no_triggers_fire():
     state = {"trace": trace, "messages": []}
     result = node(state)
     assert result["decision"].action == "continue"
-    assert result["messages"] == []
+    # Untouched state keys are not echoed back — LangGraph merges the update.
+    assert "messages" not in result
 
 
 def test_validation_node_does_not_mutate_state():
@@ -357,3 +358,35 @@ def test_validation_node_invalid_validator_mode_raises():
             triggers=[MaxRoutesTrigger(max_routes=10)],
             validator_mode="not_a_valid_mode",  # type: ignore[arg-type]
         )
+
+
+# --- partial state updates ---
+
+def test_validation_node_returns_only_updated_keys():
+    """LangGraph treats returned keys as state updates; echoing untouched keys
+    re-applies their reducers (e.g. operator.add lists), duplicating entries."""
+    node = ValidationNode(triggers=[MaxRoutesTrigger(max_routes=100)])
+    trace = make_trace(routing_events=[make_routing_event("A", "B")])
+    state = {"trace": trace, "messages": ["m1"], "cycle_count": 3}
+    result = node(state)
+    assert set(result.keys()) == {"trace", "decision"}
+
+
+async def test_validation_node_async_returns_only_updated_keys():
+    node = ValidationNode(triggers=[MaxRoutesTrigger(max_routes=100)])
+    trace = make_trace(routing_events=[make_routing_event("A", "B")])
+    state = {"trace": trace, "messages": ["m1"], "cycle_count": 3}
+    result = await node.async_call(state)
+    assert set(result.keys()) == {"trace", "decision"}
+
+
+def test_validation_node_custom_keys_returns_only_those_keys():
+    node = ValidationNode(
+        triggers=[MaxRoutesTrigger(max_routes=100)],
+        trace_key="execution_trace",
+        decision_key="validation_result",
+    )
+    trace = make_trace(routing_events=[make_routing_event("A", "B")])
+    state = {"execution_trace": trace, "messages": ["m1"]}
+    result = node(state)
+    assert set(result.keys()) == {"execution_trace", "validation_result"}
