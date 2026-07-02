@@ -179,16 +179,19 @@ def from_langchain_messages(
             )
         )
 
-        # ToolMessage → ToolResult
+        # ToolMessage → ToolResult. LangChain marks failed tool executions
+        # with status="error"; map that onto ToolResult.error so error-based
+        # triggers (e.g. ToolErrorRateTrigger) see the failure.
         if msg_type == "tool":
             call_id: str = str(getattr(msg, "tool_call_id", None) or "unknown")
             tool_name: str = str(getattr(msg, "name", None) or "unknown_tool") or "unknown_tool"
+            is_error = str(getattr(msg, "status", "")).lower() == "error"
             trace_tool_results.append(
                 ToolResult(
                     call_id=call_id,
                     tool_name=tool_name,
-                    output=content,
-                    error=None,
+                    output=None if is_error else content,
+                    error=content if is_error else None,
                     timestamp=ts,
                 )
             )
@@ -249,5 +252,9 @@ def from_langchain_messages(
         except Exception:
             continue
         builder.merge_trace(subgraph_trace)
+
+    # merge_trace lets the subgraph trace's metadata overwrite ours; restore
+    # the documented invariant that _source identifies the primary adapter.
+    builder.update_metadata(_source="langchain_messages")
 
     return builder.build()

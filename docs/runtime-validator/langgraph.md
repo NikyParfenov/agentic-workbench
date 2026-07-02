@@ -334,6 +334,7 @@ from agent_runtime_validator.integrations.langgraph import from_langchain_messag
 | `AIMessage` (`type="ai"`) | `MessageEvent(role="assistant")` + `ToolCall` per `tool_calls` entry |
 | `SystemMessage` (`type="system"`) | `MessageEvent(role="system")` |
 | `ToolMessage` (`type="tool"`) | `MessageEvent(role="tool")` + `ToolResult` |
+| `ToolMessage` with `status="error"` | As above, but content maps to `ToolResult.error` (feeds `ToolErrorRateTrigger`) |
 | Any other type | `MessageEvent(role="assistant")` |
 
 ### Usage as a `trace_builder` callback
