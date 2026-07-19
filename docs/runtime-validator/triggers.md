@@ -15,6 +15,25 @@ does not stop at the first one that fires, so the policy sees the full picture.
 
 Import them from `agent_runtime_validator.triggers`.
 
+### Cumulative evaluation semantics
+
+Triggers evaluate over the **whole trace since run start**, and a trace only
+grows. Two consequences to design around:
+
+1. **Counts are lifetime counts, not windows.** `SameToolLoopTrigger(max_repeats=5)`
+   fires when a tool has been called five times across the entire run — even
+   legitimately, spread over different subtasks. Windowed/consecutive variants
+   are planned (see the [Roadmap](roadmap.md)); until then, size thresholds to
+   the whole run, not to a burst.
+
+2. **Once fired, always fired.** A condition that was true at one checkpoint
+   stays true at every later checkpoint, because the events that satisfied it
+   never leave the trace. A host that honors `retry_last_step` would therefore
+   loop — retry, trace grows, same trigger fires, retry again. `DefaultPolicy`
+   bounds this with `max_retries_per_run` (default `3`): when the budget is
+   exhausted, a retry decision escalates to `interrupt`. See
+   [Architecture — How actions are chosen](architecture.md#how-actions-are-chosen).
+
 ## Built-in triggers
 
 | Trigger | Fires when | Default severity | Key parameters |

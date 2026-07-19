@@ -223,6 +223,28 @@ logic uses `is_terminal`. Severity filtering now sees validator-driven stops.
 Hosts with custom serialized decision shapes must produce dicts parseable as
 `ValidationDecision`, or the router will fail safe to `abort_to`.
 
+## 2026-07-19 — DefaultPolicy bounds retries per run
+
+**Decision:** `DefaultPolicy` accepts `max_retries_per_run` (default `3`).
+Every `retry_last_step` decision — severity-derived or validator-recommended —
+consumes one unit from a per-run counter stored in
+`trace.metadata["_arv_policy_retry_count"]`; once exhausted, the retry
+escalates to `interrupt` with an explanatory reason. `None` disables the
+bound, `0` never retries.
+
+**Reason:** Triggers evaluate cumulatively over a trace that never shrinks:
+once a trigger fires it fires at every subsequent checkpoint. A host that
+honors `retry_last_step` would loop indefinitely — retry, trace grows, same
+trigger fires, retry again. `TriggerScoreValidator.max_attempts` brakes only
+its own recommendations; trigger-only setups had no brake at all, so the bound
+belongs in the policy, where the retry decision is actually made.
+
+**Consequences:** Default behavior changes: a fourth retry in one run becomes
+`interrupt`. The counter lives under the `_arv_` prefix, so it persists across
+checkpoints during the run and is stripped by `replay()`. Custom `BasePolicy`
+implementations are unaffected and must implement their own bound if they
+emit retries.
+
 ## Related
 
 - [Overview](overview.md)

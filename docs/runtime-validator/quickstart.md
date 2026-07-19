@@ -246,6 +246,7 @@ validator = RuntimeValidator(
         retry_on_medium=True,    # medium → retry_last_step (else continue)
         interrupt_on_high=True,  # high → interrupt (else continue)
         abort_on_critical=True,  # critical → abort (else interrupt)
+        max_retries_per_run=3,   # retry budget; exhausted → interrupt (None = unlimited)
     ),
 )
 ```

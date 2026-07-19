@@ -357,6 +357,7 @@ policy = DefaultPolicy(
     retry_on_medium=True,    # medium severity → retry_last_step
     interrupt_on_high=True,  # high severity → interrupt
     abort_on_critical=True,  # critical severity → abort
+    max_retries_per_run=3,   # retry budget — exhausted retries escalate to interrupt
 )
 
 validator = RuntimeValidator(triggers=[...], policy=policy)

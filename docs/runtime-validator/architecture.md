@@ -167,6 +167,14 @@ and the decision's `severity` is derived from the action
 `critical`) so severity-based alerting never sees an `abort` labeled `low`.
 Otherwise the decision is `continue`.
 
+**Retry budget** — triggers evaluate cumulatively (a fired condition stays
+fired at every later checkpoint), so unbounded retries would loop forever.
+`DefaultPolicy(max_retries_per_run=3)` counts every `retry_last_step` decision
+per run in `trace.metadata["_arv_policy_retry_count"]`; once the budget is
+exhausted, the retry escalates to `interrupt` with a reason that says so.
+`None` disables the bound, `0` never retries. The counter lives under the
+`_arv_` prefix, so `replay()` strips it like all internal runtime state.
+
 ## Package structure
 
 ```

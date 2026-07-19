@@ -16,6 +16,10 @@ _ACTION_SEVERITY: dict[Action, Severity] = {
     "abort": "critical",
 }
 
+# Per-run retry counter, persisted in trace.metadata under the _arv_ prefix so
+# it survives checkpoints during the run and is stripped by replay().
+_RETRY_COUNT_KEY = "_arv_policy_retry_count"
+
 
 class DefaultPolicy(BasePolicy):
     def __init__(
@@ -25,12 +29,16 @@ class DefaultPolicy(BasePolicy):
         abort_on_critical: bool = True,
         allow_validator_downgrade: bool = False,
         min_confidence_for_override: float = 0.7,
+        max_retries_per_run: int | None = 3,
     ):
+        if max_retries_per_run is not None and max_retries_per_run < 0:
+            raise ValueError("max_retries_per_run must be >= 0 or None")
         self.retry_on_medium = retry_on_medium
         self.interrupt_on_high = interrupt_on_high
         self.abort_on_critical = abort_on_critical
         self.allow_validator_downgrade = allow_validator_downgrade
         self.min_confidence_for_override = min_confidence_for_override
+        self.max_retries_per_run = max_retries_per_run
 
     def _highest_severity(self, fired: list[TriggerResult]) -> Severity:
         if not fired:
@@ -72,13 +80,34 @@ class DefaultPolicy(BasePolicy):
             return severity_action
         return rec
 
+    def _apply_retry_budget(
+        self, trace: ExecutionTrace, action: Action
+    ) -> tuple[Action, str | None]:
+        """Bound retry_last_step decisions per run.
+
+        Triggers evaluate cumulatively over a trace that never shrinks, so a
+        fired trigger keeps firing at every subsequent checkpoint. Without a
+        bound, a medium-severity trigger plus ``retry_on_medium=True`` retries
+        forever. Returns the (possibly escalated) action and, when escalated,
+        the budget explanation to prepend to the reason.
+        """
+        if action != "retry_last_step" or self.max_retries_per_run is None:
+            return action, None
+        count = trace.metadata.get(_RETRY_COUNT_KEY, 0)
+        if count >= self.max_retries_per_run:
+            return "interrupt", (
+                f"Retry budget exhausted ({count}/{self.max_retries_per_run} "
+                f"retries used this run); escalating to interrupt"
+            )
+        trace.metadata[_RETRY_COUNT_KEY] = count + 1
+        return action, None
+
     def decide(
         self,
         trace: ExecutionTrace,
         triggered: list[TriggerResult],
         validator_result: ValidatorResult | None,
     ) -> ValidationDecision:
-        _ = trace
         fired = [t for t in triggered if t.triggered]
         triggered_by = [t.trigger_name for t in fired]
 
@@ -88,11 +117,16 @@ class DefaultPolicy(BasePolicy):
             # silently ignored just because triggers were quiet.
             if validator_result is not None and validator_result.recommendation != "continue":
                 action = validator_result.recommendation
+                action, budget_reason = self._apply_retry_budget(trace, action)
+                reason = (
+                    f"{budget_reason}. Validator reason: {validator_result.reason}"
+                    if budget_reason else validator_result.reason
+                )
                 return ValidationDecision(
                     should_continue=False,
                     action=action,
                     severity=_ACTION_SEVERITY[action],
-                    reason=validator_result.reason,
+                    reason=reason,
                     triggered_by=[],
                     validator_result=validator_result,
                 )
@@ -107,8 +141,11 @@ class DefaultPolicy(BasePolicy):
 
         severity = self._highest_severity(fired)
         action = self._resolve_action(severity, validator_result)
+        action, budget_reason = self._apply_retry_budget(trace, action)
 
-        if validator_result is None:
+        if budget_reason is not None:
+            reason = f"{budget_reason}. Trigger(s) fired: {', '.join(triggered_by)}"
+        elif validator_result is None:
             reason = f"Trigger(s) fired: {', '.join(triggered_by)}"
         elif action == validator_result.recommendation:
             reason = validator_result.reason
