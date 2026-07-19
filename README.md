@@ -340,6 +340,8 @@ decision = await validator.validate_async(trace)
 
 The LLM judge checks for: repeated tool calls, repeated failures, ping-pong routing, lack of progress, hallucinated tool arguments.
 
+Pass `reference_examples=[JudgeExample(label="good"|"bad", trace=...)]` to give the judge historical `ExecutionTrace` precedents as non-binding few-shot calibration — see [Validators — Reference cases](docs/runtime-validator/validators.md#reference-cases-few-shot-precedents).
+
 ## Recovery Policy
 
 ```python

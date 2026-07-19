@@ -142,8 +142,75 @@ judge = LLMJudgeValidator(
 )
 ```
 
-Override the prompt with `prompt_template=`; the default is exported as
+Override the prompt with `prompt_template=`; the default lives in
+`agent_runtime_validator/validators/prompts.py` and is exported as
 `DEFAULT_JUDGE_PROMPT`. The checklist it uses is below.
+
+#### Reference cases (few-shot precedents)
+
+Pass `reference_examples` to give the judge historical precedents — past runs
+that were reviewed as healthy or problematic — so it can calibrate its verdict.
+Each `JudgeExample` is a structured **`ExecutionTrace`** (not prose), plus:
+
+- `label` — a **retrospective, curated assessment** of that historical case:
+  `"good"` (reviewed as healthy) or `"bad"` (reviewed as problematic).
+- `note` — an optional short explanation of *why* the case was judged that way.
+
+The `label` is reference metadata describing the past case only. It is **not**
+an expected verdict, recommendation, or routing rule for the candidate: the
+judge is instructed to treat cases as non-binding context and evaluate the
+candidate trace on its own evidence. There are deliberately no `expected_valid`
+/ `expected_recommendation` fields — strict, known routing rules are a separate,
+deterministic use case, not this one.
+
+```python
+from agent_runtime_validator import TraceBuilder
+from agent_runtime_validator.validators import LLMJudgeValidator, JudgeExample
+
+good_case = (
+    TraceBuilder(run_id="hist-good")
+    .record_message("user", "Find recent evidence on topic X and cite sources")
+    .record_routing("supervisor", "literature_researcher", reason="needs sourced evidence")
+    .record_artifact("a1", "report", "summary with citations")
+    .build()
+)
+bad_case = (
+    TraceBuilder(run_id="hist-bad")
+    .record_message("user", "Find recent evidence on topic Y and cite sources")
+    .record_routing("supervisor", "document_analyst", reason="no retrieval capability")
+    .build()   # no grounded artifact was produced
+)
+
+judge = LLMJudgeValidator(
+    model=lambda prompt: model_backend.complete(prompt),
+    reference_examples=[
+        JudgeExample(label="good", trace=good_case,
+                     note="similar request; source-backed artifact produced"),
+        JudgeExample(label="bad", trace=bad_case,
+                     note="similar request routed to an agent that produced no grounded evidence"),
+    ],
+)
+```
+
+These are especially useful for **semantic routing evaluation**: a similar
+request may have a known-healthy or known-problematic trajectory, and the judge
+can weigh the candidate against it — without being forced to copy the past
+verdict.
+
+Reference traces are rendered **before** the candidate trace as a labeled
+`<reference_cases>` block, using the same `TraceFormatConfig` limits
+(truncation, redaction) as the candidate. They are additionally bounded by a
+reference budget so a large list cannot blow up the prompt:
+
+- `max_reference_examples` (default `4`) — at most this many cases, in caller order.
+- `max_total_reference_chars` (default `12_000`) — combined rendered size; whole
+  cases that do not fit are dropped (never truncated mid-case), with a short note
+  that cases were omitted. Setting either to `0` disables reference cases.
+
+Trace payloads (messages, tool results, artifacts, errors) are **untrusted
+execution data**: the default prompt tells the model not to follow any
+instructions found inside reference cases or the candidate trace, and to use
+their content only as evidence.
 
 #### TraceFormatConfig
 
@@ -155,6 +222,8 @@ Override the prompt with `prompt_template=`; the default is exported as
 | `max_chars_trigger_evidence` | `300` | Max chars for each fired trigger's evidence JSON |
 | `include_trace_details` | `True` | Include per-event trace sections in prompt |
 | `truncation` | `"tail"` | Truncation strategy: `"tail"`, `"head"`, or `"middle_ellipsis"` |
+| `max_reference_examples` | `4` | Max reference cases rendered, in caller order (`0` disables) |
+| `max_total_reference_chars` | `12_000` | Combined size budget for the reference block (`0` disables) |
 
 Truncation strategies:
 - `"tail"` — keep the beginning, drop the end (default; preserves context).
