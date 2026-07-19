@@ -30,6 +30,11 @@ and may change.
   machine-readable telemetry channel separate from chat `messages`
 - Safer default trace formatting/redaction profiles for traces passed to LLM
   judges
+- Log sanitization for the validator error path: `logger.exception` records the
+  raw provider exception (message + traceback), and some SDKs echo request-body
+  snippets — i.e. trace content — into exception text. Needs a design choice:
+  a redaction hook on `RuntimeValidator`, or exception-type-only at ERROR with
+  the full traceback demoted to DEBUG
 - Pre-execution tool argument validation hooks
 
 ## v0.3 — more frameworks and integration polish

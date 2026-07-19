@@ -24,8 +24,10 @@ reproducible:
   stripped from the copy, so an archived trace whose budget was consumed
   during the original run still gets a real validation on replay.
 - If ``finished_at`` is missing, it is pinned to the latest event timestamp
-  (falling back to ``started_at``), so time-based triggers measure the run's
-  actual duration instead of the wall-clock age of the archive.
+  (falling back to ``started_at``), so time-based triggers measure the
+  *observed trace duration* — the span from ``started_at`` to the last
+  recorded event — instead of the wall-clock age of the archive. Idle time
+  after the last event is not part of that span.
 
 Replaying the same trace against the same validator config therefore yields
 the same decision, no matter how often or when it is replayed.

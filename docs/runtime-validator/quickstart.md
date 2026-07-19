@@ -214,8 +214,9 @@ reproducible:
   whose budget was consumed during the original run still gets a real
   validation;
 - a missing `finished_at` is pinned to the latest event timestamp, so
-  time-based triggers measure the run's actual duration, not the age of the
-  archive.
+  time-based triggers measure the *observed trace duration* (start to last
+  recorded event), not the age of the archive. Idle time after the last event
+  is not included.
 
 Replaying the same trace against the same config always yields the same
 decision.
