@@ -85,6 +85,7 @@ builder.add_edge("validation", "supervisor")
 | `validator_mode` | `"on_trigger"` | When to invoke the validator — `"on_trigger"`: only when triggers fire; `"always"`: on every call |
 | `on_validator_error` | `"skip"` | Fallback when the validator raises — see [Validators](validators.md#validator-errors) |
 | `trace_builder` | `None` | Custom callable `(state) -> ExecutionTrace`; replaces default trace resolution |
+| `strict_trace_key` | `False` | Raise instead of silently falling back when `state[trace_key]` is missing or has an unusable type |
 
 ### Validator mode
 
@@ -121,6 +122,13 @@ the trace was originally passed as a serialized dict.
 **With a custom `trace_builder`** the callable is called with `state` and its
 return value is used directly. The `trace_key` lookup is skipped entirely,
 giving you full control over how the trace is assembled.
+
+> **Guarding against a typo'd `trace_key`:** the silent `state_to_trace`
+> fallback yields an *empty* trace when the state has no `_trace_*` keys — no
+> trigger can fire on it, so a misconfigured key makes the guardrail validate
+> nothing. Pass `strict_trace_key=True` to raise instead. In the non-strict
+> default, a missing *custom* key or a value of an unusable type logs a
+> warning before falling back.
 
 ### Custom trace builder
 

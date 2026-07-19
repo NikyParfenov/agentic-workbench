@@ -7,6 +7,8 @@ class NoProgressTrigger(BaseTrigger):
     """Fires when many tool calls have occurred but no artifacts were produced."""
 
     def __init__(self, min_tool_calls: int = 5, severity: Severity = "medium"):
+        if min_tool_calls < 1:
+            raise ValueError("min_tool_calls must be >= 1")
         self.min_tool_calls = min_tool_calls
         self.severity: Severity = severity
 

@@ -6,6 +6,8 @@ from .base import BaseTrigger
 
 class MaxExecutionTimeTrigger(BaseTrigger):
     def __init__(self, max_seconds: float, severity: Severity = "high"):
+        if max_seconds <= 0:
+            raise ValueError("max_seconds must be > 0")
         self.max_seconds = max_seconds
         self.severity: Severity = severity
 

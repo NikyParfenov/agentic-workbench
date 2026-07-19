@@ -15,6 +15,10 @@ does not stop at the first one that fires, so the policy sees the full picture.
 
 Import them from `agent_runtime_validator.triggers`.
 
+Constructors validate their thresholds: zero or negative limits (and an empty
+`watched_agents` set, or an error rate outside `(0, 1]`) raise `ValueError` at
+construction time instead of producing a trigger that fires always or never.
+
 ### Cumulative evaluation semantics
 
 Triggers evaluate over the **whole trace since run start**, and a trace only

@@ -14,6 +14,8 @@ class AgentDelegationLoopTrigger(BaseTrigger):
     """
 
     def __init__(self, max_repeats: int, severity: Severity = "high"):
+        if max_repeats < 1:
+            raise ValueError("max_repeats must be >= 1")
         self.max_repeats = max_repeats
         self.severity: Severity = severity
 

@@ -13,6 +13,8 @@ class SubagentNoOutputTrigger(BaseTrigger):
     """
 
     def __init__(self, min_stalled: int = 1, severity: Severity = "medium"):
+        if min_stalled < 1:
+            raise ValueError("min_stalled must be >= 1")
         self.min_stalled = min_stalled
         self.severity: Severity = severity
 

@@ -12,6 +12,10 @@ class NoToolUsageTrigger(BaseTrigger):
         min_expected_calls: int = 1,
         severity: Severity = "medium",
     ):
+        if not watched_agents:
+            raise ValueError("watched_agents must not be empty")
+        if min_expected_calls < 1:
+            raise ValueError("min_expected_calls must be >= 1")
         self.watched_agents = watched_agents
         self.min_expected_calls = min_expected_calls
         self.severity: Severity = severity

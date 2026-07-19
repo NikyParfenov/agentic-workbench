@@ -5,6 +5,10 @@ from .base import BaseTrigger
 
 class ToolErrorRateTrigger(BaseTrigger):
     def __init__(self, max_error_rate: float, min_results: int = 1, severity: Severity = "high"):
+        if not 0 < max_error_rate <= 1:
+            raise ValueError("max_error_rate must be in (0, 1]")
+        if min_results < 1:
+            raise ValueError("min_results must be >= 1")
         self.max_error_rate = max_error_rate
         self.min_results = min_results
         self.severity: Severity = severity

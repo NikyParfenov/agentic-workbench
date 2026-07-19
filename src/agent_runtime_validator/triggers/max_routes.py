@@ -5,6 +5,8 @@ from .base import BaseTrigger
 
 class MaxRoutesTrigger(BaseTrigger):
     def __init__(self, max_routes: int, severity: Severity = "high"):
+        if max_routes < 1:
+            raise ValueError("max_routes must be >= 1")
         self.max_routes = max_routes
         self.severity: Severity = severity
 

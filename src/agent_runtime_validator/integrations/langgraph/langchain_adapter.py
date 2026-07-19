@@ -164,6 +164,10 @@ def from_langchain_messages(
     trace_messages: list[MessageEvent] = []
     trace_tool_calls: list[ToolCall] = []
     trace_tool_results: list[ToolResult] = []
+    # Global counter for id-less tool calls: a per-message index would produce
+    # colliding call_ids ("tool-call-0") whenever two messages each carry an
+    # id-less call, breaking call/result matching downstream.
+    fallback_call_id_counter = 0
 
     for idx, msg in enumerate(messages):
         msg_type = _message_type(msg)
@@ -199,15 +203,17 @@ def from_langchain_messages(
         # AIMessage tool_calls → ToolCall
         raw_tool_calls = getattr(msg, "tool_calls", None)
         if raw_tool_calls:
-            for tc_idx, tc in enumerate(raw_tool_calls):
+            for tc in raw_tool_calls:
                 tc_name: str = str(_get_attr_or_key(tc, "name") or "")
                 tc_args: dict = _get_attr_or_key(tc, "args") or {}
                 if not isinstance(tc_args, dict):
                     tc_args = {}
                 raw_call_id = _get_attr_or_key(tc, "id")
-                tc_call_id: str = (
-                    str(raw_call_id) if raw_call_id is not None else f"tool-call-{tc_idx}"
-                )
+                if raw_call_id is not None:
+                    tc_call_id: str = str(raw_call_id)
+                else:
+                    tc_call_id = f"tool-call-{fallback_call_id_counter}"
+                    fallback_call_id_counter += 1
                 trace_tool_calls.append(
                     ToolCall(
                         tool_name=tc_name,

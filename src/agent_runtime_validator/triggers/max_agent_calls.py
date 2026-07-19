@@ -11,6 +11,8 @@ class MaxAgentCallsTrigger(BaseTrigger):
     """
 
     def __init__(self, max_calls: int, severity: Severity = "high"):
+        if max_calls < 1:
+            raise ValueError("max_calls must be >= 1")
         self.max_calls = max_calls
         self.severity: Severity = severity
 

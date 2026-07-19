@@ -7,6 +7,8 @@ from .base import BaseTrigger
 
 class MaxContextTokensTrigger(BaseTrigger):
     def __init__(self, max_tokens: int, severity: Severity = "high"):
+        if max_tokens < 1:
+            raise ValueError("max_tokens must be >= 1")
         self.max_tokens = max_tokens
         self.severity: Severity = severity
 

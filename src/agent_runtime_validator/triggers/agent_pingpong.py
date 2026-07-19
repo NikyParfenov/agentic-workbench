@@ -12,6 +12,8 @@ class AgentPingPongTrigger(BaseTrigger):
     """
 
     def __init__(self, max_cycles: int, severity: Severity = "high"):
+        if max_cycles < 1:
+            raise ValueError("max_cycles must be >= 1")
         self.max_cycles = max_cycles
         self.severity: Severity = severity
 

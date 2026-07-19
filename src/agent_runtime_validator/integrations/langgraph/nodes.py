@@ -129,6 +129,7 @@ class ValidationNode:
         validator_mode: ValidatorMode = "on_trigger",
         on_validator_error: OnValidatorError = "skip",
         trace_builder: TraceBuilderFn | None = None,
+        strict_trace_key: bool = False,
     ):
         self._runtime = RuntimeValidator(
             triggers=triggers,
@@ -142,17 +143,49 @@ class ValidationNode:
         self.trace_key = trace_key
         self.decision_key = decision_key
         self._trace_builder = trace_builder
+        self.strict_trace_key = strict_trace_key
 
     def _resolve_trace(self, state: dict[str, Any]) -> ExecutionTrace:
+        """Resolve the trace to validate from graph state.
+
+        The silent fallback to ``state_to_trace(state)`` is convenient but can
+        mask a typo'd ``trace_key``: a state without ``_trace_*`` keys yields
+        an *empty* trace, on which no trigger can ever fire — the guardrail
+        silently validates nothing. ``strict_trace_key=True`` raises instead;
+        the non-strict default logs a warning when the miss looks like a
+        mistake (a customized key that is absent, or a value of an unusable
+        type).
+        """
         if self._trace_builder is not None:
             return self._trace_builder(state)
         raw = state.get(self.trace_key)
         if raw is None:
+            if self.strict_trace_key:
+                raise ValueError(
+                    f"state[{self.trace_key!r}] is missing and "
+                    "strict_trace_key=True; refusing to validate a "
+                    "state_to_trace fallback"
+                )
+            if self.trace_key != "trace":
+                logger.warning(
+                    "state[%r] is missing (custom trace_key); falling back to "
+                    "state_to_trace — triggers will see only _trace_* keys",
+                    self.trace_key,
+                )
             return state_to_trace(state)
         if isinstance(raw, dict):
             return ExecutionTrace(**raw)
         if isinstance(raw, ExecutionTrace):
             return raw
+        if self.strict_trace_key:
+            raise ValueError(
+                f"state[{self.trace_key!r}] has unusable type "
+                f"{type(raw).__name__}; expected ExecutionTrace or dict"
+            )
+        logger.warning(
+            "state[%r] has unusable type %s; falling back to state_to_trace",
+            self.trace_key, type(raw).__name__,
+        )
         return state_to_trace(state)
 
     def __call__(self, state: dict[str, Any]) -> dict[str, Any]:
