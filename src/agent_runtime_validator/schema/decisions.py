@@ -58,9 +58,27 @@ class ValidatorResult(BaseModel):
 
 
 class ValidationDecision(BaseModel):
+    """Final verdict of a validation pass.
+
+    ``should_continue`` is ``True`` only when ``action == "continue"`` — it
+    means *no intervention requested*, not *the run must halt*. Recovery
+    actions (``retry_last_step``, ``reroute``) have ``should_continue=False``
+    even though execution normally keeps going after the recovery step. Use
+    :attr:`is_terminal` to ask "should the run stop".
+
+    ``severity`` is the highest severity among fired triggers; when no trigger
+    fired and the validator drove the decision, it is derived from the decided
+    action instead.
+    """
+
     should_continue: bool
     action: Action
     severity: Severity
     reason: str
     triggered_by: list[str] = Field(default_factory=list)
     validator_result: ValidatorResult | None = None
+
+    @property
+    def is_terminal(self) -> bool:
+        """``True`` when the run should stop (``interrupt`` or ``abort``)."""
+        return self.action in ("interrupt", "abort")

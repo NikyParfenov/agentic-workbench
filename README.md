@@ -148,9 +148,15 @@ validator = RuntimeValidator(
 )
 
 decision = validator.validate(trace)
-if not decision.should_continue:
+if decision.is_terminal:                 # interrupt or abort — stop the run
     print(f"Stopping: {decision.action} — {decision.reason}")
+elif not decision.should_continue:       # retry_last_step or reroute — recover
+    print(f"Recovery requested: {decision.action} — {decision.reason}")
 ```
+
+`should_continue` means "no intervention requested" (`action == "continue"`),
+not "the run must halt" — recovery actions keep the run alive. Use
+`decision.is_terminal` to check for a stop.
 
 For a runnable loop-detection demo:
 

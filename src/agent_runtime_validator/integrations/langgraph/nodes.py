@@ -6,10 +6,17 @@ except ImportError:
         "Install it with: pip install agent-runtime-validator[langgraph]"
     ) from None
 
+import logging
 from typing import Any, Callable
 
 from ...schema.trace import ExecutionTrace
 from ...schema.decisions import ValidationDecision
+
+logger = logging.getLogger("agent_runtime_validator")
+
+_VALID_ACTIONS = frozenset(
+    {"continue", "retry_last_step", "reroute", "interrupt", "abort"}
+)
 from ...triggers.base import BaseTrigger
 from ...validators.base import BaseValidator
 from ...policies.base import BasePolicy
@@ -53,6 +60,12 @@ def create_validation_router(
     ``suggested_next_agent`` can resolve to. By default (``None``),
     ``suggested_next_agent`` is ignored and reroute always goes to
     ``reroute_to``. Pass a set to opt in to dynamic rerouting.
+
+    A missing decision (``state[decision_key]`` absent) routes to
+    ``continue_to`` — the validation node simply has not run. A *malformed*
+    decision — an unparseable dict, a wrong-typed object, or an unknown
+    action — fails safe to ``abort_to`` instead: a corrupted control signal
+    must never silently continue the run.
     """
     abort_target = abort_to if abort_to is not None else END
     interrupt_target = interrupt_to if interrupt_to is not None else END
@@ -62,11 +75,26 @@ def create_validation_router(
         if raw is None:
             return continue_to
         if isinstance(raw, dict):
-            decision = ValidationDecision(**raw)
-        else:
-            decision = raw
+            try:
+                raw = ValidationDecision(**raw)
+            except Exception:
+                logger.error(
+                    "Malformed decision dict in state[%r]; failing safe to %r",
+                    decision_key, abort_target,
+                )
+                return abort_target
 
-        match decision.action:
+        action = getattr(raw, "action", None)
+        if action not in _VALID_ACTIONS:
+            logger.error(
+                "Unknown or missing decision action %r in state[%r]; "
+                "failing safe to %r",
+                action, decision_key, abort_target,
+            )
+            return abort_target
+        validator_result = getattr(raw, "validator_result", None)
+
+        match action:
             case "continue":
                 return continue_to
             case "retry_last_step":
@@ -74,18 +102,16 @@ def create_validation_router(
             case "reroute":
                 if (
                     allowed_reroutes is not None
-                    and decision.validator_result
-                    and decision.validator_result.suggested_next_agent
-                    and decision.validator_result.suggested_next_agent in allowed_reroutes
+                    and validator_result
+                    and validator_result.suggested_next_agent
+                    and validator_result.suggested_next_agent in allowed_reroutes
                 ):
-                    return decision.validator_result.suggested_next_agent
+                    return validator_result.suggested_next_agent
                 return reroute_to if reroute_to is not None else continue_to
             case "interrupt":
                 return interrupt_target
-            case "abort":
+            case _:  # "abort"
                 return abort_target
-            case _:
-                return continue_to
 
     return router
 

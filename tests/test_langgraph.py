@@ -397,3 +397,39 @@ def test_router_interrupt_default_end():
     from langgraph.graph import END
     router = create_validation_router(continue_to="supervisor")
     assert router({"decision": _decision("interrupt")}) == END
+
+
+# --- router fail-safe on malformed decisions ---
+
+def test_router_malformed_dict_decision_fails_safe_to_end():
+    from langgraph.graph import END
+    router = create_validation_router(continue_to="supervisor")
+    assert router({"decision": {"garbage": True}}) == END
+
+
+def test_router_malformed_dict_decision_uses_abort_target():
+    router = create_validation_router(continue_to="supervisor", abort_to="cleanup")
+    assert router({"decision": {"garbage": True}}) == "cleanup"
+
+
+def test_router_wrong_type_decision_fails_safe():
+    from langgraph.graph import END
+    router = create_validation_router(continue_to="supervisor")
+    assert router({"decision": "abort"}) == END  # bare string is not a decision
+
+
+def test_router_unknown_action_fails_safe():
+    from langgraph.graph import END
+
+    class WeirdDecision:
+        action = "explode"
+        validator_result = None
+
+    router = create_validation_router(continue_to="supervisor")
+    assert router({"decision": WeirdDecision()}) == END
+
+
+def test_router_missing_decision_still_continues():
+    """Absent decision means the validation node did not run — not malformed."""
+    router = create_validation_router(continue_to="supervisor")
+    assert router({}) == "supervisor"

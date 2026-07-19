@@ -203,3 +203,58 @@ def test_no_triggers_none_validator_result_continues():
     decision = policy.decide(make_trace(), [], None)
     assert decision.action == "continue"
     assert decision.validator_result is None
+
+
+# ---------------------------------------------------------------------------
+# Decision semantics: severity contract and is_terminal
+# ---------------------------------------------------------------------------
+
+def _no_trigger_decision(recommendation):
+    policy = DefaultPolicy()
+    vr = ValidatorResult(
+        valid=False, confidence=0.9, recommendation=recommendation, reason="gate"
+    )
+    return policy.decide(make_trace(), [], vr)
+
+
+def test_no_trigger_abort_severity_is_critical():
+    decision = _no_trigger_decision("abort")
+    assert decision.action == "abort"
+    assert decision.severity == "critical"
+
+
+def test_no_trigger_interrupt_severity_is_high():
+    decision = _no_trigger_decision("interrupt")
+    assert decision.severity == "high"
+
+
+def test_no_trigger_reroute_severity_is_medium():
+    decision = _no_trigger_decision("reroute")
+    assert decision.severity == "medium"
+
+
+def test_no_trigger_retry_severity_is_medium():
+    decision = _no_trigger_decision("retry_last_step")
+    assert decision.severity == "medium"
+
+
+def test_is_terminal_true_for_interrupt_and_abort():
+    assert _no_trigger_decision("abort").is_terminal is True
+    assert _no_trigger_decision("interrupt").is_terminal is True
+
+
+def test_is_terminal_false_for_recovery_and_continue():
+    from agent_runtime_validator.schema.decisions import ValidationDecision
+    assert _no_trigger_decision("reroute").is_terminal is False
+    assert _no_trigger_decision("retry_last_step").is_terminal is False
+    cont = ValidationDecision(
+        should_continue=True, action="continue", severity="low", reason="ok"
+    )
+    assert cont.is_terminal is False
+
+
+def test_recovery_actions_not_terminal_but_not_continue():
+    """The documented contract: should_continue=False + is_terminal=False = recovery."""
+    decision = _no_trigger_decision("retry_last_step")
+    assert decision.should_continue is False
+    assert decision.is_terminal is False

@@ -6,6 +6,16 @@ from .base import BasePolicy
 
 _SEVERITY_ORDER: dict[Severity, int] = {"low": 0, "medium": 1, "high": 2, "critical": 3}
 
+# Severity implied by an action, used when no trigger fired and the validator
+# alone drove the decision — so an abort never ships with severity="low".
+_ACTION_SEVERITY: dict[Action, Severity] = {
+    "continue": "low",
+    "retry_last_step": "medium",
+    "reroute": "medium",
+    "interrupt": "high",
+    "abort": "critical",
+}
+
 
 class DefaultPolicy(BasePolicy):
     def __init__(
@@ -77,10 +87,11 @@ class DefaultPolicy(BasePolicy):
             # honor escalations — a validator recommending stop should not be
             # silently ignored just because triggers were quiet.
             if validator_result is not None and validator_result.recommendation != "continue":
+                action = validator_result.recommendation
                 return ValidationDecision(
                     should_continue=False,
-                    action=validator_result.recommendation,
-                    severity="low",
+                    action=action,
+                    severity=_ACTION_SEVERITY[action],
                     reason=validator_result.reason,
                     triggered_by=[],
                     validator_result=validator_result,

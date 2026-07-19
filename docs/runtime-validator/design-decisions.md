@@ -200,6 +200,29 @@ runs the mutation contract is unchanged — `validate()` still writes counters
 into the passed trace's metadata, which integrations persist deliberately.
 Users must not put their own keys under `_arv_`.
 
+## 2026-07-19 — Decision semantics: should_continue ≠ halt; severity follows the decision
+
+**Decision:** `should_continue` means "no intervention requested"
+(`action == "continue"`); recovery actions carry `should_continue=False` even
+though the run keeps going. A new `is_terminal` property answers "should the
+run stop" (`interrupt`/`abort`). `ValidationDecision.severity` is the highest
+fired trigger severity; when no trigger fired and the validator alone drove
+the decision, severity is derived from the action instead (`abort` →
+`critical`, `interrupt` → `high`, recovery → `medium`). The LangGraph router
+fails safe: a malformed or unknown decision routes to `abort_to`, never to
+`continue_to`; only a *missing* decision continues (the node simply didn't
+run).
+
+**Reason:** `should_continue=False` on a retry was being read as "stop the
+run" — the README itself made that mistake. And an `abort` labeled
+`severity="low"` is invisible to severity-based alerting. A corrupted control
+signal silently continuing is the same fail-open trap.
+
+**Consequences:** Consumers stop overloading `should_continue`; stopping
+logic uses `is_terminal`. Severity filtering now sees validator-driven stops.
+Hosts with custom serialized decision shapes must produce dicts parseable as
+`ValidationDecision`, or the router will fail safe to `abort_to`.
+
 ## Related
 
 - [Overview](overview.md)

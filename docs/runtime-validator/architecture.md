@@ -98,12 +98,17 @@ are required.
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `should_continue` | `bool` | `True` only when `action == "continue"` |
+| `should_continue` | `bool` | `True` only when `action == "continue"` — "no intervention requested", **not** "run must halt" |
+| `is_terminal` | `bool` (property) | `True` when the run should stop (`interrupt` or `abort`) |
 | `action` | `Action` | Final action |
-| `severity` | `Severity` | Highest fired severity |
+| `severity` | `Severity` | Highest fired trigger severity; derived from the action when no trigger fired |
 | `reason` | `str` | Explanation |
 | `triggered_by` | `list[str]` | Names of fired triggers |
 | `validator_result` | `ValidatorResult \| None` | Present if a validator ran |
+
+Recovery actions (`retry_last_step`, `reroute`) have `should_continue=False`
+even though execution normally keeps going after the recovery step — check
+`is_terminal` when deciding whether to stop the run.
 
 ## RuntimeValidator internals
 
@@ -156,7 +161,10 @@ and `validator_result.confidence >= min_confidence_for_override`. Critical
 severity can never be downgraded.
 
 **When no trigger fires** — if the validator ran (e.g. `validator_mode="always"`)
-and recommends something other than `"continue"`, that recommendation is used.
+and recommends something other than `"continue"`, that recommendation is used,
+and the decision's `severity` is derived from the action
+(`retry_last_step`/`reroute` → `medium`, `interrupt` → `high`, `abort` →
+`critical`) so severity-based alerting never sees an `abort` labeled `low`.
 Otherwise the decision is `continue`.
 
 ## Package structure
