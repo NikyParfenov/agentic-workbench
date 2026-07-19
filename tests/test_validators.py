@@ -343,11 +343,11 @@ def test_trigger_score_max_attempts():
 
     r1 = validator.validate(trace, results)
     assert r1.recommendation == "reroute"
-    assert trace.metadata["_trigger_score_attempts"] == 1
+    assert trace.metadata["_arv_trigger_score_attempts"] == 1
 
     r2 = validator.validate(trace, results)
     assert r2.recommendation == "reroute"
-    assert trace.metadata["_trigger_score_attempts"] == 2
+    assert trace.metadata["_arv_trigger_score_attempts"] == 2
 
     r3 = validator.validate(trace, results)
     assert r3.recommendation == "interrupt"

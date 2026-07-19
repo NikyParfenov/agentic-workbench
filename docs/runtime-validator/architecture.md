@@ -131,7 +131,7 @@ skip-on-budget-exhaustion (`on_validator_budget_exhausted="skip"`). Both
 The sync `validate` raises `RuntimeError` if a validator returns an awaitable;
 `validate_async` awaits it instead. The `NoOpValidator` is special-cased so the
 healthy path performs no extra work. Validator call budget state is kept in
-`trace.metadata["_runtime_validator_call_count"]`.
+`trace.metadata["_arv_validator_call_count"]`.
 
 ## How actions are chosen
 

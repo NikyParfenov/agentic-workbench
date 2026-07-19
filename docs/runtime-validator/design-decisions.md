@@ -177,6 +177,29 @@ consumes validator budget. Programming errors (returning an awaitable from
 sync `validate()`) still raise `RuntimeError` — those are bugs to fix, not
 runtime conditions to absorb.
 
+## 2026-07-19 — Internal runtime state lives under the `_arv_` metadata prefix; replay strips it
+
+**Decision:** All internal counters the runtime persists in `trace.metadata`
+(validator call budget, trigger-score attempts, future bookkeeping) use the
+`_arv_` key prefix. `replay()` / `replay_async()` deep-copy the trace, strip
+every `_arv_*` key (plus the legacy pre-prefix names), and pin a missing
+`finished_at` to the latest event timestamp before validating.
+
+**Reason:** Budget and attempt counters are *live-run* state: they exist so a
+retry loop cannot re-invoke an expensive validator indefinitely. Persisting
+them is required for checkpoint continuity, but replaying an archived trace
+with those counters intact silently skips the validator or flips its
+recommendation — the replay lies. Similarly, computing elapsed time against
+`datetime.now()` makes an old archive look like a multi-day run. A single
+prefix means future counters are covered automatically, with no key list to
+keep in sync.
+
+**Consequences:** Replaying the same trace with the same config always yields
+the same decision, and the caller's trace object is never mutated. During live
+runs the mutation contract is unchanged — `validate()` still writes counters
+into the passed trace's metadata, which integrations persist deliberately.
+Users must not put their own keys under `_arv_`.
+
 ## Related
 
 - [Overview](overview.md)

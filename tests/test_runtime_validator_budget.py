@@ -258,7 +258,7 @@ def test_budget_persists_through_validation_node_with_serialized_trace():
     # Budget metadata must be in returned trace
     returned_trace = first["trace"]
     assert isinstance(returned_trace, ExecutionTrace)
-    assert returned_trace.metadata.get("_runtime_validator_call_count") == 1
+    assert returned_trace.metadata.get("_arv_validator_call_count") == 1
 
 
 # ---------------------------------------------------------------------------
@@ -288,4 +288,4 @@ def test_budget_metadata_key():
 
     runtime.validate(trace)
 
-    assert trace.metadata.get("_runtime_validator_call_count") == 1
+    assert trace.metadata.get("_arv_validator_call_count") == 1

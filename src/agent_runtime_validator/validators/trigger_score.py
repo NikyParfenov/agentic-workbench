@@ -6,7 +6,7 @@ from .base import BaseValidator
 class TriggerScoreValidator(BaseValidator):
     """Deterministic validator that aggregates fired triggers into a risk score."""
 
-    _COUNTER_KEY = "_trigger_score_attempts"
+    _COUNTER_KEY = "_arv_trigger_score_attempts"
 
     def __init__(
         self,

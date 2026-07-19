@@ -256,7 +256,7 @@ entirely.
 call (returning the `{trace_key: trace, decision_key: decision}` update). This
 is important for two reasons:
 
-1. **Budget continuity** — `trace.metadata["_runtime_validator_call_count"]`
+1. **Budget continuity** — `trace.metadata["_arv_validator_call_count"]`
    persists across node invocations. Without writing the trace back, the budget
    counter resets on every call when the trace was passed as a serialized dict.
 
@@ -314,7 +314,7 @@ for the full offline replay API.
 LangGraph checkpointers (e.g. `MemorySaver`, `SqliteSaver`) serialize state to
 JSON between steps. After deserialization the `ExecutionTrace` arrives as a
 plain `dict`. `ValidationNode` detects this and re-parses it before validating,
-so `trace.metadata["_runtime_validator_call_count"]` is never lost.
+so `trace.metadata["_arv_validator_call_count"]` is never lost.
 
 If you build a custom `trace_builder`, make sure your builder preserves
 `state[trace_key]["metadata"]` (if the key already holds a serialized trace)

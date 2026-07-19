@@ -205,9 +205,20 @@ json_str = trace_to_json(trace)         # -> str (pretty-printed)
 trace2   = trace_from_json(json_str)    # -> ExecutionTrace
 ```
 
-`replay` and `replay_async` are thin wrappers over `validator.validate()` that
-signal the intent — an existing trace is being re-validated offline, not being
-produced live.
+`replay` and `replay_async` isolate the trace before validating so results are
+reproducible:
+
+- the input trace is **deep-copied** — replay never mutates it;
+- internal runtime counters persisted in `trace.metadata` (validator budget,
+  attempt counters — all `_arv_*` keys) are stripped from the copy, so a trace
+  whose budget was consumed during the original run still gets a real
+  validation;
+- a missing `finished_at` is pinned to the latest event timestamp, so
+  time-based triggers measure the run's actual duration, not the age of the
+  archive.
+
+Replaying the same trace against the same config always yields the same
+decision.
 
 ## Async runs
 

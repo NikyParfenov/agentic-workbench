@@ -351,7 +351,7 @@ runtime = RuntimeValidator(
 | `max_validator_calls_per_run` | `None` | Max invocations per run; `None` = unlimited, `0` = never call |
 | `on_validator_budget_exhausted` | `"skip"` | What to do when budget is exhausted |
 
-Budget state is stored in `trace.metadata["_runtime_validator_call_count"]`
+Budget state is stored in `trace.metadata["_arv_validator_call_count"]`
 and persists across repeated calls to `validate()` on the same `ExecutionTrace`
 object. In LangGraph, `ValidationNode` writes the trace back into state after
 each call so budget state survives across serialized/checkpointed traces.

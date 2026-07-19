@@ -12,7 +12,15 @@ from .policies.default import DefaultPolicy
 
 logger = logging.getLogger("agent_runtime_validator")
 
-_BUDGET_KEY = "_runtime_validator_call_count"
+INTERNAL_STATE_PREFIX = "_arv_"
+"""Metadata-key prefix for all internal runtime state stored on a trace.
+
+Budget counters, attempt counters, and any future internal bookkeeping live
+under this prefix in ``trace.metadata`` so tools like :func:`~agent_runtime_validator.replay.replay`
+can strip runtime state wholesale without maintaining a key list.
+"""
+
+_BUDGET_KEY = "_arv_validator_call_count"
 
 OnValidatorBudgetExhausted = Literal[
     "skip",
