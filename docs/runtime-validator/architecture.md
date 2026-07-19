@@ -122,7 +122,11 @@ skip-on-budget-exhaustion (`on_validator_budget_exhausted="skip"`). Both
 4. If the validator budget is exhausted, either pass `validator_result=None`
    (`on_validator_budget_exhausted="skip"`) or pass a synthetic
    `ValidatorResult` with the configured recommendation.
-5. Call `policy.decide(trace, trigger_results, validator_result)`.
+5. If the validator raises, the exception is logged and contained —
+   `on_validator_error` selects the fallback (`"skip"` passes
+   `validator_result=None`; any action value produces a synthetic result).
+   Validator failures never propagate to the host.
+6. Call `policy.decide(trace, trigger_results, validator_result)`.
 
 The sync `validate` raises `RuntimeError` if a validator returns an awaitable;
 `validate_async` awaits it instead. The `NoOpValidator` is special-cased so the

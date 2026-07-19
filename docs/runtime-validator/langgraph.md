@@ -83,6 +83,7 @@ builder.add_edge("validation", "supervisor")
 | `max_validator_calls_per_run` | `None` | Max validator invocations per run; `None` = unlimited |
 | `on_validator_budget_exhausted` | `"skip"` | What to do when budget is exhausted — see [Validators](validators.md#validator-call-budget) |
 | `validator_mode` | `"on_trigger"` | When to invoke the validator — `"on_trigger"`: only when triggers fire; `"always"`: on every call |
+| `on_validator_error` | `"skip"` | Fallback when the validator raises — see [Validators](validators.md#validator-errors) |
 | `trace_builder` | `None` | Custom callable `(state) -> ExecutionTrace`; replaces default trace resolution |
 
 ### Validator mode

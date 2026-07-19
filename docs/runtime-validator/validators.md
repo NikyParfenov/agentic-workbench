@@ -381,6 +381,35 @@ single validator invocation.
 invocations can happen across the entire run — it guards against repeated
 expensive calls during retry/reroute orchestration loops.
 
+## Validator errors
+
+If the validator itself raises — a network timeout, provider rate limit, or a
+bug in a custom validator — `RuntimeValidator` contains the exception instead
+of letting it crash the host run. `on_validator_error` controls the fallback:
+
+```python
+runtime = RuntimeValidator(
+    triggers=[...],
+    validator=LLMJudgeValidator(model=call_model),
+    on_validator_error="skip",   # default
+)
+```
+
+| `on_validator_error` | Behavior when the validator raises |
+|---|---|
+| `"skip"` | Treat the validator as unavailable; pass `validator_result=None` to the policy. Triggers + policy decide. **Default.** |
+| `"continue"` / `"retry_last_step"` / `"reroute"` / `"interrupt"` / `"abort"` | Return a synthetic validator result with that recommendation, same as the budget-exhausted options above. |
+
+The raw exception is logged (with traceback) but never propagated and never
+placed into the decision — only the exception *type* appears in the synthetic
+result's reason, so provider error details cannot leak into downstream prompts.
+
+This is deliberately separate from malformed-**output** handling:
+`LLMJudgeValidator.max_retries` / `fallback_recommendation` cover a response
+that arrived but could not be parsed; `on_validator_error` covers the call not
+completing at all. A validator call that raises still consumes one unit of the
+validator call budget.
+
 ## Writing a custom validator
 
 Subclass `BaseValidator` and implement `validate`. Return a `ValidatorResult`

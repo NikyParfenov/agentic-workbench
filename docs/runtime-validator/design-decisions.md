@@ -158,6 +158,25 @@ decision. In `"on_trigger"` mode this change is backward-compatible because the
 validator is never called on clean traces (so `validator_result` is `None` in the
 no-trigger branch and the policy behaves identically).
 
+## 2026-07-19 — Validator infrastructure failures are contained, not propagated
+
+**Decision:** `RuntimeValidator` catches exceptions raised by the validator
+(sync and async) and applies `on_validator_error` — `"skip"` (default) passes
+`validator_result=None` to the policy; any action value produces a synthetic
+`ValidatorResult`. Only the exception type reaches the decision; the full
+error goes to the log.
+
+**Reason:** A guardrail whose own infrastructure failure (LLM timeout, rate
+limit) crashes the run it protects is worse than no guardrail. This failure
+class is distinct from malformed validator *output*, which
+`LLMJudgeValidator` already handles via `max_retries`/`fallback_recommendation`.
+
+**Consequences:** Hosts choose fail-open (`"skip"`, `"continue"`) or
+fail-closed (`"interrupt"`, `"abort"`) per deployment. A raising call still
+consumes validator budget. Programming errors (returning an awaitable from
+sync `validate()`) still raise `RuntimeError` — those are bugs to fix, not
+runtime conditions to absorb.
+
 ## Related
 
 - [Overview](overview.md)
